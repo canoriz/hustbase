@@ -1,5 +1,7 @@
 ﻿
 #pragma warning(disable : 4996)
+#include <stdio.h>
+#include <string.h>
 #include "SYS_Manager.h"
 #include "QU_Manager.h"
 
@@ -63,10 +65,61 @@ RC execute(char * sql) {
 
 
 RC CreateDB(char *dbpath, char *dbname) {
+	const int PATH_SIZE = 320;
+	char full_table_path[PATH_SIZE] = { '\0' };
+	char full_column_path[PATH_SIZE] = { '\0' };
+
+	// make path
+	strcpy(full_table_path, dbpath);
+	strncat(full_table_path, "\\", 1);
+	strcpy(full_column_path, full_table_path);
+
+	// make table file and column file
+	strncat(full_table_path, "SYSTABLE", 10);
+	strncat(full_column_path, "SYSCOLUMN", 10);
+
+	FILE* table = NULL;
+	FILE* column = NULL;
+
+	table = fopen(full_table_path, "wb");
+	column = fopen(full_column_path, "wb");
+
+	if (table && column) {
+		// create both success
+
+		fclose(table);
+		fclose(column);
+		return SUCCESS;
+	}
+
+	if (table) {
+		fclose(table);
+	}
+	if (column) {
+		fclose(column);
+	}
+
 	return FAIL;
 }
 
 RC DropDB(char *dbname) {
+	const int PATH_SIZE = 320;
+	char full_path[PATH_SIZE] = "";
+	strcpy(full_path, dbname);
+	strncat(full_path, "\\SYSTABLE", 15);
+
+	int remove_table_retv = remove(full_path);
+
+	strcpy(full_path, dbname);
+	strncat(full_path, "\\SYSCOLUMN", 15);
+	int remove_column_retv = remove(full_path);
+
+	if (remove_table_retv == 0 && remove_column_retv == 0) {
+		// both removed
+		return SUCCESS;
+	}
+
+	// at least one file not removed
 	return FAIL;
 }
 

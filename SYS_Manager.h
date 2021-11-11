@@ -12,6 +12,15 @@
 #include <vector>
 #include <string>
 
+typedef enum {
+	V1
+} Version;
+
+typedef struct SysFileHdr {
+	char a[10] = "hustbase";
+	Version ver;
+} SysFileHdr;
+
 
 RC CreateDB(char *dbpath,char *dbname);
 RC DropDB(char *dbname);
