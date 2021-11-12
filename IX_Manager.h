@@ -15,7 +15,7 @@ typedef struct {
 
 typedef struct {
 	bool bOpen;				//该索引句柄是否已经与一个文件关联
-	PF_FileHandle fileHandle;	//该索引文件对应的页面文件句柄
+	int fileID;		//该索引文件对应的页面文件句柄
 	IX_FileHeader fileHeader;	//该索引文件的控制页句柄
 }IX_IndexHandle;
 
