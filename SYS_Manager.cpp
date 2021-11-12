@@ -6,6 +6,78 @@
 #include "QU_Manager.h"
 
 
+const int PATH_SIZE = 320;
+
+/*
+class DBHandle {
+private:
+	char systbl[PATH_SIZE];
+	char syscol[PATH_SIZE];
+	char sysroot[PATH_SIZE];
+	bool inuse;
+public:
+	DBHandle() {
+		strcpy(systbl, "");
+		strcpy(syscol, "");
+		strcpy(sysroot, "");
+		inuse = false;
+	}
+	bool open(const char* const db_root);
+	bool close();
+};
+
+
+bool DBHandle::open (const char* const db_root) {
+	strcpy(sysroot, db_root);
+	strcpy(systbl, sysroot);
+	strcpy(syscol, sysroot);
+	strncat(systbl, "\\SYSTABLE", 15);
+
+	strcpy(syscol, db_root);
+	strncat(syscol, "\\SYSCOLUMN", 15);
+
+	FILE* ftbl = fopen(systbl, "rb");
+	FILE* fcol = fopen(syscol, "rb");
+
+	if (ftbl && fcol) {
+		fclose(ftbl);
+		fclose(fcol);
+		inuse = true;
+		return true;
+	}
+
+	inuse = false;
+	return false;
+}
+
+bool DBHandle::close() {
+	if (inuse) {
+		inuse = false;
+		return true;
+	}
+	// close nothing???
+	return false;
+}
+
+DBHandle working_db;
+*/
+
+typedef struct TableRec {
+	char tablename[21];
+	int  attrcount;
+} TableRec;
+
+typedef struct ColumnRec {
+	char tablename[21];
+	char attrname[21];
+	int  attrtype;
+	int  attrlength;
+	int  attroffset;
+	bool ix_flag;
+	char indexname[21];
+} ColumnRec;
+
+
 RC execute(char * sql) {
 	return FAIL;
 /*
@@ -63,11 +135,9 @@ RC execute(char * sql) {
 */
 }
 
-
 RC CreateDB(char *dbpath, char *dbname) {
-	const int PATH_SIZE = 320;
-	char full_table_path[PATH_SIZE] = { '\0' };
-	char full_column_path[PATH_SIZE] = { '\0' };
+	char full_table_path[PATH_SIZE] = "";
+	char full_column_path[PATH_SIZE] = "";
 
 	// make path
 	strcpy(full_table_path, dbpath);
@@ -78,56 +148,59 @@ RC CreateDB(char *dbpath, char *dbname) {
 	strncat(full_table_path, "SYSTABLE", 10);
 	strncat(full_column_path, "SYSCOLUMN", 10);
 
-	FILE* table = NULL;
-	FILE* column = NULL;
+	RC table = FAIL;
+	RC column = FAIL;
 
-	table = fopen(full_table_path, "wb");
-	column = fopen(full_column_path, "wb");
+	table = RM_CreateFile(full_table_path, sizeof(TableRec));
+	column = RM_CreateFile(full_column_path, sizeof(ColumnRec));
 
-	if (table && column) {
+	if (table == SUCCESS && column == SUCCESS) {
 		// create both success
-
-		fclose(table);
-		fclose(column);
 		return SUCCESS;
-	}
-
-	if (table) {
-		fclose(table);
-	}
-	if (column) {
-		fclose(column);
 	}
 
 	return FAIL;
 }
 
 RC DropDB(char *dbname) {
-	const int PATH_SIZE = 320;
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, dbname);
 	strncat(full_path, "\\SYSTABLE", 15);
 
 	int remove_table_retv = remove(full_path);
 
-	strcpy(full_path, dbname);
-	strncat(full_path, "\\SYSCOLUMN", 15);
-	int remove_column_retv = remove(full_path);
-
-	if (remove_table_retv == 0 && remove_column_retv == 0) {
-		// both removed
-		return SUCCESS;
+	if (remove_table_retv == 0) {
+		// SYSTABLE remove success, indicates this dir is a hust db, can delete
+		/*
+		   Use system's rmdir command to remove directory
+		   STUPID BUT WORKS
+		*/
+		char command[PATH_SIZE + 30] = "rmdir /s /q ";
+		strcat(command, dbname);
+		int directory_remove_retv = system(command);
+		if (directory_remove_retv == 0) {
+			return SUCCESS;
+		}
 	}
 
-	// at least one file not removed
 	return FAIL;
 }
 
-RC OpenDB(char *dbname){
+RC OpenDB(char *dbname) {
+	/*
+	if (working_db.open(dbname)) {
+		return SUCCESS;
+	}
+	*/
 	return FAIL;
 }
 
 RC CloseDB(){
+	/*
+	if (working_db.close()) {
+		return SUCCESS;
+	}
+	*/
 	return FAIL;
 }
 
