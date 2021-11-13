@@ -18,7 +18,7 @@ private:
 
 	RM_FileHandle systable;
 	RM_FileHandle syscolumn;
-	std::vector<RM_FileHandle> tables;
+	std::vector<RM_FileHandle> opened_tables;
 
 public:
 	DataBase() {
@@ -73,7 +73,7 @@ bool DataBase::close() {
 			RM_CloseFile(&this->syscolumn) == SUCCESS ? true : false;
 
 		bool all_table_closed = true;
-		for (auto t : this->tables) {
+		for (auto t : this->opened_tables) {
 			all_table_closed &=
 				RM_CloseFile(&t) == SUCCESS ? true : false;
 		}
