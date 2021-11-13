@@ -171,11 +171,13 @@
     <ClInclude Include="DBTest.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="IX_Manager.h" />
+    <ClInclude Include="metadata.h" />
     <ClInclude Include="parse.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PF_Manager.h" />
     <ClInclude Include="QU_Manager.h" />
     <ClInclude Include="RC.h" />
+    <ClInclude Include="result.h" />
     <ClInclude Include="RM_Manager.h" />
     <ClInclude Include="str.h" />
     <ClInclude Include="SYS_Manager.h" />

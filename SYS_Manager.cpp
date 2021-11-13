@@ -5,79 +5,150 @@
 #include <vector>
 #include "SYS_Manager.h"
 #include "QU_Manager.h"
+#include "result.h"
+#include "metadata.h"
 
 
 const int PATH_SIZE = 320;
 
+
+class Table {
+public:
+	char name[21];
+	RM_FileHandle file;
+
+public:
+	Table() :name("") {}
+	static bool          create(char* path, char* name, int sz);
+	static Result<Table> open(char* path, char* name);
+
+public:
+	bool close();
+	bool destroy();
+};
+
+bool Table::create(char* path, char* name, int sz) {
+	RC table = FAIL;
+	table = RM_CreateFile(path, sz);
+	return table == SUCCESS;
+}
+
+Result<Table> Table::open(char* path, char* name) {
+	Table t;
+	if (RM_OpenFile(path, &t.file) == SUCCESS) {
+		strcpy(t.name, name);
+		return Result<Table>(t);
+	}
+	return Result<Table>::Err();
+}
+
+bool Table::close() {
+	return RM_CloseFile(&this->file) == SUCCESS;
+}
+
+bool Table::destroy() {
+	//TODO
+	return true;
+}
+
 class DataBase {
 private:
-	char systbl[PATH_SIZE];
-	char syscol[PATH_SIZE];
 	char sysroot[PATH_SIZE];
 	bool opened;
 
-	RM_FileHandle systable;
-	RM_FileHandle syscolumn;
-	std::vector<RM_FileHandle> opened_tables;
+	Table systable;
+	Table syscolumn;
+	std::vector<Table> opened_tables;
+
+private:
+	void prefix_root(char* dest, const char* const subdir);
 
 public:
-	DataBase() {
-		strcpy(systbl, "");
-		strcpy(syscol, "");
-		strcpy(sysroot, "");
-		opened = false;
+	DataBase(const char* const dbpath = "") {
+		strcpy(this->sysroot, dbpath);
+		this->opened = false;
 	}
-	bool inuse();
-	bool open(const char* const db_root);
+	char* const name();
+	bool in_use();
 	bool close();
+
+public:
+	static Result<DataBase> open(const char* const db_root);
+	static bool             create(char* dbpath);
 };
 
+bool DataBase::create(char* dbpath) {
+	DataBase db(dbpath);
+	char full_table_path[PATH_SIZE] = "";
+	char full_column_path[PATH_SIZE] = "";
 
-bool DataBase::inuse() {
+	// make path
+	strcpy(full_table_path, dbpath);
+	strcat(full_table_path, "\\");
+	strcpy(full_column_path, full_table_path);
+
+	// make table file and column file
+	strcat(full_table_path, "SYSTABLE");
+	strcat(full_column_path, "SYSCOLUMN");
+
+	return (
+		Table::create(full_table_path, "SYSTABLE", sizeof(TableRec)) &&
+		Table::create(full_column_path, "SYSTABLE", sizeof(ColumnRec))
+	);
+}
+
+char* const DataBase::name() {
+	return this->sysroot;
+}
+
+void DataBase::prefix_root(char* dest, const char* const subdir) {
+	// sysroot + "\" + subdir
+	strcpy(dest, this->sysroot);
+	strcat(dest, "\\");
+	strcat(dest, subdir);
+}
+
+bool DataBase::in_use() {
 	return this->opened;
 }
 
+Result<DataBase> DataBase::open (const char* const db_root) {
+	DataBase db(db_root);
+	char full_path[PATH_SIZE];
+	db.prefix_root(full_path, "SYSTABLE");
+	Result<Table> open_systable  = Table::open(full_path, "SYSTABLE");
+	db.prefix_root(full_path, "SYSCOLUMN");
+	Result<Table> open_syscolumn = Table::open(full_path, "SYSCOLUMN");
 
-bool DataBase::open (const char* const db_root) {
-	// close previous DB if neccessary
-	if (this->inuse()) {
-		this->close();
+	if (open_systable.ok && open_syscolumn.ok) {
+		db.opened    = true;
+		db.syscolumn = open_syscolumn.result;
+		db.systable  = open_systable.result;
+		return Result<DataBase>(db);
 	}
 
-	strcpy(sysroot, db_root);
-	strcpy(systbl, sysroot);
-	strcpy(syscol, sysroot);
-	strncat(systbl, "\\SYSTABLE", 15);
-
-	strcpy(syscol, db_root);
-	strncat(syscol, "\\SYSCOLUMN", 15);
-
-	RC table_opened = RM_OpenFile(systbl, &this->systable);
-	RC column_opened = RM_OpenFile(syscol, &this->syscolumn);
-
-	if (table_opened == SUCCESS && column_opened == SUCCESS) {
-		this->opened = true;
-		return true;
+	// open table failed, cleanning
+	if (open_systable.ok) {
+		open_systable.result.close();
 	}
-
-	this->opened = false;
-	return false;
+	if (open_syscolumn.ok) {
+		open_syscolumn.result.close();
+	}
+	return Result<DataBase>::Err();
 }
 
 bool DataBase::close() {
 	if (this->opened) {
 		this->opened = false;
-		bool systable_closed =
-			RM_CloseFile(&this->systable) == SUCCESS ? true : false;
-		bool syscolumn_closed =
-			RM_CloseFile(&this->syscolumn) == SUCCESS ? true : false;
 
-		bool all_table_closed = true;
-		for (auto t : this->opened_tables) {
-			all_table_closed &=
-				RM_CloseFile(&t) == SUCCESS ? true : false;
+		bool all_table_closed = (
+			this->systable.close() &
+			this->syscolumn.close()
+		);
+
+		for (auto &t : this->opened_tables) {
+			all_table_closed &= t.close();
 		}
-		all_table_closed &= systable_closed & syscolumn_closed;
 		return all_table_closed;
 	}
 
@@ -86,21 +157,6 @@ bool DataBase::close() {
 }
 
 DataBase working_db;
-
-typedef struct TableRec {
-	char tablename[21];
-	int  attrcount;
-} TableRec;
-
-typedef struct ColumnRec {
-	char tablename[21];
-	char attrname[21];
-	int  attrtype;
-	int  attrlength;
-	int  attroffset;
-	bool ix_flag;
-	char indexname[21];
-} ColumnRec;
 
 
 RC execute(char * sql) {
@@ -161,50 +217,33 @@ RC execute(char * sql) {
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
-	char full_table_path[PATH_SIZE] = "";
-	char full_column_path[PATH_SIZE] = "";
-
-	// make path
-	strcpy(full_table_path, dbpath);
-	strncat(full_table_path, "\\", 1);
-	strcpy(full_column_path, full_table_path);
-
-	// make table file and column file
-	strncat(full_table_path, "SYSTABLE", 10);
-	strncat(full_column_path, "SYSCOLUMN", 10);
-
-	RC table = FAIL;
-	RC column = FAIL;
-
-	table = RM_CreateFile(full_table_path, sizeof(TableRec));
-	column = RM_CreateFile(full_column_path, sizeof(ColumnRec));
-
-	if (table == SUCCESS && column == SUCCESS) {
-		// create both success
+	if (DataBase::create(dbpath)) {
 		return SUCCESS;
 	}
-
 	return FAIL;
 }
 
 RC DropDB(char *dbname) {
-	RC db_closed = CloseDB();
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, dbname);
-	strncat(full_path, "\\SYSTABLE", 15);
+	strcat(full_path, "\\SYSTABLE");
 
-	int remove_table_retv = remove(full_path);
-
-	if (remove_table_retv == 0 && db_closed == SUCCESS) {
-		// SYSTABLE remove success, indicates this dir is a hust db, can delete
+	const int SAME = 0;
+	const int OK = 0;
+	if ((
+			strcmp(dbname, working_db.name()) != SAME || // the dropping DB is not tht opened DB
+			CloseDB() == SUCCESS // the dropping db is opened, but now closed
+		) &&
+		remove(full_path) == OK /* SYSTABLE remove success, indicates this is a
+								hustdb directory, not regular dir, can delete */
+		) {
 		/*
 		   Use system's rmdir command to remove directory
 		   STUPID BUT WORKS
 		*/
 		char command[PATH_SIZE + 30] = "rmdir /s /q ";
 		strcat(command, dbname);
-		int directory_remove_retv = system(command);
-		if (directory_remove_retv == 0) {
+		if (system(command) == OK) {
 			return SUCCESS;
 		}
 	}
@@ -213,7 +252,10 @@ RC DropDB(char *dbname) {
 }
 
 RC OpenDB(char *dbname) {
-	if (working_db.open(dbname)) {
+	Result<DataBase> res = DataBase::open(dbname);
+	if (res.ok) {
+		working_db.close();
+		working_db = res.result;
 		return SUCCESS;
 	}
 	return FAIL;
@@ -225,7 +267,6 @@ RC CloseDB(){
 	}
 	return FAIL;
 }
-
 
 RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	return FAIL;
@@ -256,4 +297,3 @@ RC Delete(char *relName, int nConditions, Condition *conditions) {
 RC Update(char *relName, char *attrName, Value *value, int nConditions, Condition *conditions) {
 	return FAIL;
 }
-
