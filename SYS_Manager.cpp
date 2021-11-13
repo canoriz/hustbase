@@ -93,7 +93,7 @@ bool DataBase::create(char* dbpath) {
 
 	return (
 		Table::create(full_table_path, "SYSTABLE", sizeof(TableRec)) &&
-		Table::create(full_column_path, "SYSTABLE", sizeof(ColumnRec))
+		Table::create(full_column_path, "SYSCOLUMN", sizeof(ColumnRec))
 	);
 }
 
