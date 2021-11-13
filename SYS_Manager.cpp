@@ -2,32 +2,48 @@
 #pragma warning(disable : 4996)
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 #include "SYS_Manager.h"
 #include "QU_Manager.h"
 
 
 const int PATH_SIZE = 320;
 
-/*
-class DBHandle {
+class DataBase {
 private:
 	char systbl[PATH_SIZE];
 	char syscol[PATH_SIZE];
 	char sysroot[PATH_SIZE];
-	bool inuse;
+	bool opened;
+
+	RM_FileHandle systable;
+	RM_FileHandle syscolumn;
+	std::vector<RM_FileHandle> tables;
+
 public:
-	DBHandle() {
+	DataBase() {
 		strcpy(systbl, "");
 		strcpy(syscol, "");
 		strcpy(sysroot, "");
-		inuse = false;
+		opened = false;
 	}
+	bool inuse();
 	bool open(const char* const db_root);
 	bool close();
 };
 
 
-bool DBHandle::open (const char* const db_root) {
+bool DataBase::inuse() {
+	return this->opened;
+}
+
+
+bool DataBase::open (const char* const db_root) {
+	// close previous DB if neccessary
+	if (this->inuse()) {
+		this->close();
+	}
+
 	strcpy(sysroot, db_root);
 	strcpy(systbl, sysroot);
 	strcpy(syscol, sysroot);
@@ -36,31 +52,40 @@ bool DBHandle::open (const char* const db_root) {
 	strcpy(syscol, db_root);
 	strncat(syscol, "\\SYSCOLUMN", 15);
 
-	FILE* ftbl = fopen(systbl, "rb");
-	FILE* fcol = fopen(syscol, "rb");
+	RC table_opened = RM_OpenFile(systbl, &this->systable);
+	RC column_opened = RM_OpenFile(syscol, &this->syscolumn);
 
-	if (ftbl && fcol) {
-		fclose(ftbl);
-		fclose(fcol);
-		inuse = true;
+	if (table_opened == SUCCESS && column_opened == SUCCESS) {
+		this->opened = true;
 		return true;
 	}
 
-	inuse = false;
+	this->opened = false;
 	return false;
 }
 
-bool DBHandle::close() {
-	if (inuse) {
-		inuse = false;
-		return true;
+bool DataBase::close() {
+	if (this->opened) {
+		this->opened = false;
+		bool systable_closed =
+			RM_CloseFile(&this->systable) == SUCCESS ? true : false;
+		bool syscolumn_closed =
+			RM_CloseFile(&this->syscolumn) == SUCCESS ? true : false;
+
+		bool all_table_closed = true;
+		for (auto t : this->tables) {
+			all_table_closed &=
+				RM_CloseFile(&t) == SUCCESS ? true : false;
+		}
+		all_table_closed &= systable_closed & syscolumn_closed;
+		return all_table_closed;
 	}
+
 	// close nothing???
-	return false;
+	return true;
 }
 
-DBHandle working_db;
-*/
+DataBase working_db;
 
 typedef struct TableRec {
 	char tablename[21];
@@ -163,13 +188,14 @@ RC CreateDB(char *dbpath, char *dbname) {
 }
 
 RC DropDB(char *dbname) {
+	RC db_closed = CloseDB();
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, dbname);
 	strncat(full_path, "\\SYSTABLE", 15);
 
 	int remove_table_retv = remove(full_path);
 
-	if (remove_table_retv == 0) {
+	if (remove_table_retv == 0 && db_closed == SUCCESS) {
 		// SYSTABLE remove success, indicates this dir is a hust db, can delete
 		/*
 		   Use system's rmdir command to remove directory
@@ -187,20 +213,16 @@ RC DropDB(char *dbname) {
 }
 
 RC OpenDB(char *dbname) {
-	/*
 	if (working_db.open(dbname)) {
 		return SUCCESS;
 	}
-	*/
 	return FAIL;
 }
 
 RC CloseDB(){
-	/*
 	if (working_db.close()) {
 		return SUCCESS;
 	}
-	*/
 	return FAIL;
 }
 
