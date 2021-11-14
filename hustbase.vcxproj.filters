@@ -63,6 +63,9 @@
     <ClInclude Include="metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp">
@@ -99,6 +102,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="metadata.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -181,6 +181,7 @@
     <ClInclude Include="RM_Manager.h" />
     <ClInclude Include="str.h" />
     <ClInclude Include="SYS_Manager.h" />
+    <ClInclude Include="table.h" />
     <ClInclude Include="yacc_sql.tab.h" />
   </ItemGroup>
   <ItemGroup>
@@ -200,6 +201,7 @@
     <ClCompile Include="QU_Manager.cpp" />
     <ClCompile Include="RM_Manager.cpp" />
     <ClCompile Include="SYS_Manager.cpp" />
+    <ClCompile Include="table.cpp" />
     <ClCompile Include="yacc_sql.tab.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
