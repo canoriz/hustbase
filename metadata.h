@@ -22,6 +22,17 @@ typedef struct ColumnRec {
 	int  attroffset;
 	bool ix_flag;
 	char indexname[21];
+
+	ColumnRec(
+		const char* const _attrname,
+		int _attrtype,
+		int _attrlength,
+		int _attroffset,
+		bool _ix_flag,
+		const char* const _index_name
+	);
+	ColumnRec();
+
 } ColumnRec;
 
 

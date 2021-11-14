@@ -21,6 +21,11 @@ struct Result {
 		this->result = _result;
 		this->err    = E();
 	}
+	Result() {
+		this->ok     = false;
+		this->result = T();
+		this->err    = E();
+	}
 	static Result<T, E> Ok(T _result) {
 		return Result<T, E>(_result);
 	}

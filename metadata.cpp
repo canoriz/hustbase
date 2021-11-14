@@ -60,3 +60,28 @@ void TableMetaData::close() {
 		this->file = NULL;
 	}
 }
+
+ColumnRec::ColumnRec(
+		const char* const _attrname,
+		int _attrtype,
+		int _attrlength,
+		int _attroffset,
+		bool _ix_flag,
+		const char* const _index_name
+) {
+	strcpy(this->attrname, _attrname);
+	this->attrtype   = _attrtype;
+	this->attrlength = _attrlength;
+	this->attroffset = _attroffset;
+	this->ix_flag    = _ix_flag;
+	strcpy(this->indexname, _index_name);
+}
+
+ColumnRec::ColumnRec() {
+	strcpy(this->attrname, "");
+	this->attrtype   = 0;
+	this->attrlength = 0;
+	this->attroffset = 0;
+	this->ix_flag    = false;
+	strcpy(this->indexname, "");
+}

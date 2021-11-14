@@ -31,6 +31,8 @@ public:
 	char* const name();
 	bool in_use();
 	bool close();
+	Result<bool, RC> drop_table(const char* const table_name);
+	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
@@ -39,8 +41,8 @@ public:
 
 bool DataBase::create(char* dbpath) {
 	return (
-		Table::create(dbpath, "SYSTABLE", sizeof(TableRec)).ok &&
-		Table::create(dbpath, "SYSCOLUMN", sizeof(ColumnRec)).ok
+		Table::create(dbpath, "SYSTABLE", 0, NULL).ok &&
+		Table::create(dbpath, "SYSCOLUMN", 0, NULL).ok
 	);
 }
 
@@ -86,6 +88,35 @@ bool DataBase::close() {
 
 	// close nothing???
 	return true;
+}
+
+Result<bool, RC> DataBase::drop_table(const char* const table_name) {
+	for (auto it = this->opened_tables.begin(); it != this->opened_tables.end(); ++it) {
+		const int SAME = 0;
+		if (strcmp(table_name, it->name) == SAME) {
+			// removed it from opened tables, and there should be no more to remove
+			it->close();
+			this->opened_tables.erase(it);
+		}
+	}
+	// not opened table
+	return Result<bool, RC>(true);
+	char full_path[PATH_SIZE] = "";
+	this->prefix_root(full_path, table_name);
+	const int OK = 0;
+	if (remove(full_path) == OK) {
+		return Result<bool, RC>::Ok(true);
+	}
+	return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+}
+
+Result<bool, RC> DataBase::add_table(char* const table_name, int count, AttrInfo* attrs)
+{
+	auto res = Table::create(this->sysroot, table_name, count, attrs);
+	if (res.ok) {
+		return Result<bool, RC>::Ok(true);
+	}
+	return Result<bool, RC>::Err(res.err);
 }
 
 DataBase working_db;
@@ -202,11 +233,20 @@ RC CloseDB(){
 }
 
 RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
-	return FAIL;
+	auto res = working_db.add_table(relName, attrCount, attributes);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 
 RC DropTable(char *relName) {
-	return FAIL;
+	// only delete table, not delete .table
+	auto res = working_db.drop_table(relName);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 
 RC IndexExist(char *relName, char *attrName, RM_Record *rec) {

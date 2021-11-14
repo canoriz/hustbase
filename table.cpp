@@ -6,23 +6,47 @@
 
 const int PATH_SIZE = 320;
 
-Result<bool, RC> Table::create(char* path, char* name, int sz) {
-	RC table = FAIL;
-	char full_path[PATH_SIZE] = "";
-
+Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attrs) {
 	// metadata path
+	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, path);
 	strcat(full_path, "\\.");
 	strcat(full_path, name);
 	if (!TableMetaData::create_file(full_path)) {
-		// filed create metadata
+		// failed create metadata
 		return Result<bool, RC>::Err(FAIL);
 	}
-	table = RM_CreateFile(path, sz);
-	if (table == SUCCESS) {
-		return Result<bool, RC>(true);
+
+	auto res = TableMetaData::open(full_path);
+	if (!res.ok) {
+		// open metadata failed
+		return Result<bool, RC>::Err(FAIL);
 	}
-	return Result<bool, RC>::Err(table);
+
+	int aggregate_size = 0;
+	for (auto i = 0; i < count; i++) {
+		AttrInfo tmp_attr = attrs[i];
+		res.result.columns.push_back(
+			ColumnRec(
+				tmp_attr.attrName, tmp_attr.attrType,
+				tmp_attr.attrLength, aggregate_size,
+				false, ""
+			)
+		);
+		aggregate_size += tmp_attr.attrLength;
+	}
+	if (!res.result.write()) {
+		// write to file failed
+		return Result<bool, RC>::Err(FAIL);
+	}
+
+	RC table = FAIL;
+
+	table = RM_CreateFile(path, aggregate_size);
+	if (table != SUCCESS) {
+		return Result<bool, RC>::Err(table);
+	}
+	return Result<bool, RC>(true);
 }
 
 Result<Table, RC> Table::open(char* path, char* name) {

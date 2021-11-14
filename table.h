@@ -21,7 +21,7 @@ public:
 
 public:
 	Table() :name("") {}
-	static Result<bool, RC>  create(char* path, char* name, int sz);
+	static Result<bool, RC>  create(char* path, char* name, int count, AttrInfo* attrs);
 	static Result<Table, RC> open(char* path, char* name);
 
 public:
