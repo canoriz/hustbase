@@ -13,6 +13,8 @@ const int PATH_SIZE = 320;
 
 
 class Table {
+private:
+	TableMetaData meta;
 public:
 	char name[21];
 	RM_FileHandle file;
@@ -29,6 +31,16 @@ public:
 
 Result<bool, RC> Table::create(char* path, char* name, int sz) {
 	RC table = FAIL;
+	char full_path[PATH_SIZE] = "";
+
+	// metadata path
+	strcpy(full_path, path);
+	strcat(full_path, "\\.");
+	strcat(full_path, name);
+	if (!TableMetaData::create_file(full_path)) {
+		// filed create metadata
+		return Result<bool, RC>::Err(FAIL);
+	}
 	table = RM_CreateFile(path, sz);
 	if (table == SUCCESS) {
 		return Result<bool, RC>(true);
@@ -37,8 +49,23 @@ Result<bool, RC> Table::create(char* path, char* name, int sz) {
 }
 
 Result<Table, RC> Table::open(char* path, char* name) {
+	char full_path[PATH_SIZE] = "";
+	// metadata path
+	strcpy(full_path, path);
+	strcat(full_path, "\\.");
+	strcat(full_path, name);
+	Result<TableMetaData, int> tmeta = TableMetaData::open(full_path);
+	if (!tmeta.ok) {
+		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	// table path
+	strcpy(full_path, path);
+	strcat(full_path, "\\");
+	strcat(full_path, name);
 	Table t;
-	RC res = RM_OpenFile(path, &t.file);
+	t.meta = tmeta.result;
+	RC res = RM_OpenFile(full_path, &t.file);
 	if (res == SUCCESS) {
 		strcpy(t.name, name);
 		return Result<Table, RC>::Ok(t);
@@ -47,6 +74,7 @@ Result<Table, RC> Table::open(char* path, char* name) {
 }
 
 bool Table::close() {
+	this->meta.close();
 	return RM_CloseFile(&this->file) == SUCCESS;
 }
 
@@ -60,8 +88,6 @@ private:
 	char sysroot[PATH_SIZE];
 	bool opened;
 
-	Table systable;
-	Table syscolumn;
 	std::vector<Table> opened_tables;
 
 private:
@@ -82,22 +108,9 @@ public:
 };
 
 bool DataBase::create(char* dbpath) {
-	DataBase db(dbpath);
-	char full_table_path[PATH_SIZE] = "";
-	char full_column_path[PATH_SIZE] = "";
-
-	// make path
-	strcpy(full_table_path, dbpath);
-	strcat(full_table_path, "\\");
-	strcpy(full_column_path, full_table_path);
-
-	// make table file and column file
-	strcat(full_table_path, "SYSTABLE");
-	strcat(full_column_path, "SYSCOLUMN");
-
 	return (
-		Table::create(full_table_path, "SYSTABLE", sizeof(TableRec)).ok &&
-		Table::create(full_column_path, "SYSCOLUMN", sizeof(ColumnRec)).ok
+		Table::create(dbpath, "SYSTABLE", sizeof(TableRec)).ok &&
+		Table::create(dbpath, "SYSCOLUMN", sizeof(ColumnRec)).ok
 	);
 }
 
@@ -120,36 +133,21 @@ Result<DataBase, RC> DataBase::open (const char* const db_root) {
 	DataBase db(db_root);
 	char full_path[PATH_SIZE];
 	db.prefix_root(full_path, "SYSTABLE");
-	Result<Table, RC> open_systable  = Table::open(full_path, "SYSTABLE");
-	db.prefix_root(full_path, "SYSCOLUMN");
-	Result<Table, RC> open_syscolumn = Table::open(full_path, "SYSCOLUMN");
+	FILE* fp = fopen(full_path, "rb");
 
-	if (open_systable.ok && open_syscolumn.ok) {
-		db.opened    = true;
-		db.syscolumn = open_syscolumn.result;
-		db.systable  = open_systable.result;
+	if (fp) {
+		db.opened = true;
+		fclose(fp);
 		return Result<DataBase, RC>(db);
 	}
-
-	// open table failed, cleanning
-	if (open_systable.ok) {
-		open_systable.result.close();
-	}
-	if (open_syscolumn.ok) {
-		open_syscolumn.result.close();
-	}
-	return Result<DataBase, RC>::Err(FAIL);
+	return Result<DataBase, RC>::Err(DB_NOT_EXIST);
 }
 
 bool DataBase::close() {
 	if (this->opened) {
 		this->opened = false;
 
-		bool all_table_closed = (
-			this->systable.close() &
-			this->syscolumn.close()
-		);
-
+		bool all_table_closed = true;
 		for (auto &t : this->opened_tables) {
 			all_table_closed &= t.close();
 		}
@@ -228,9 +226,10 @@ RC CreateDB(char *dbpath, char *dbname) {
 }
 
 RC DropDB(char *dbname) {
+	// dbname: english characters only
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, dbname);
-	strcat(full_path, "\\SYSTABLE");
+	strcat(full_path, "\\.SYSTABLE");
 
 	const int SAME = 0;
 	const int OK = 0;
