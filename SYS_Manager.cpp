@@ -19,27 +19,31 @@ public:
 
 public:
 	Table() :name("") {}
-	static bool          create(char* path, char* name, int sz);
-	static Result<Table> open(char* path, char* name);
+	static Result<bool, RC>  create(char* path, char* name, int sz);
+	static Result<Table, RC> open(char* path, char* name);
 
 public:
 	bool close();
 	bool destroy();
 };
 
-bool Table::create(char* path, char* name, int sz) {
+Result<bool, RC> Table::create(char* path, char* name, int sz) {
 	RC table = FAIL;
 	table = RM_CreateFile(path, sz);
-	return table == SUCCESS;
+	if (table == SUCCESS) {
+		return Result<bool, RC>(true);
+	}
+	return Result<bool, RC>::Err(table);
 }
 
-Result<Table> Table::open(char* path, char* name) {
+Result<Table, RC> Table::open(char* path, char* name) {
 	Table t;
-	if (RM_OpenFile(path, &t.file) == SUCCESS) {
+	RC res = RM_OpenFile(path, &t.file);
+	if (res == SUCCESS) {
 		strcpy(t.name, name);
-		return Result<Table>(t);
+		return Result<Table, RC>::Ok(t);
 	}
-	return Result<Table>::Err();
+	return Result<Table, RC>::Err(res);
 }
 
 bool Table::close() {
@@ -73,8 +77,8 @@ public:
 	bool close();
 
 public:
-	static Result<DataBase> open(const char* const db_root);
-	static bool             create(char* dbpath);
+	static Result<DataBase, RC> open(const char* const db_root);
+	static bool				    create(char* dbpath);
 };
 
 bool DataBase::create(char* dbpath) {
@@ -92,8 +96,8 @@ bool DataBase::create(char* dbpath) {
 	strcat(full_column_path, "SYSCOLUMN");
 
 	return (
-		Table::create(full_table_path, "SYSTABLE", sizeof(TableRec)) &&
-		Table::create(full_column_path, "SYSCOLUMN", sizeof(ColumnRec))
+		Table::create(full_table_path, "SYSTABLE", sizeof(TableRec)).ok &&
+		Table::create(full_column_path, "SYSCOLUMN", sizeof(ColumnRec)).ok
 	);
 }
 
@@ -112,19 +116,19 @@ bool DataBase::in_use() {
 	return this->opened;
 }
 
-Result<DataBase> DataBase::open (const char* const db_root) {
+Result<DataBase, RC> DataBase::open (const char* const db_root) {
 	DataBase db(db_root);
 	char full_path[PATH_SIZE];
 	db.prefix_root(full_path, "SYSTABLE");
-	Result<Table> open_systable  = Table::open(full_path, "SYSTABLE");
+	Result<Table, RC> open_systable  = Table::open(full_path, "SYSTABLE");
 	db.prefix_root(full_path, "SYSCOLUMN");
-	Result<Table> open_syscolumn = Table::open(full_path, "SYSCOLUMN");
+	Result<Table, RC> open_syscolumn = Table::open(full_path, "SYSCOLUMN");
 
 	if (open_systable.ok && open_syscolumn.ok) {
 		db.opened    = true;
 		db.syscolumn = open_syscolumn.result;
 		db.systable  = open_systable.result;
-		return Result<DataBase>(db);
+		return Result<DataBase, RC>(db);
 	}
 
 	// open table failed, cleanning
@@ -134,7 +138,7 @@ Result<DataBase> DataBase::open (const char* const db_root) {
 	if (open_syscolumn.ok) {
 		open_syscolumn.result.close();
 	}
-	return Result<DataBase>::Err();
+	return Result<DataBase, RC>::Err(FAIL);
 }
 
 bool DataBase::close() {
@@ -252,7 +256,7 @@ RC DropDB(char *dbname) {
 }
 
 RC OpenDB(char *dbname) {
-	Result<DataBase> res = DataBase::open(dbname);
+	Result<DataBase, RC> res = DataBase::open(dbname);
 	if (res.ok) {
 		working_db.close();
 		working_db = res.result;
