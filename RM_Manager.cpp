@@ -4,7 +4,6 @@
 
 
 
-//辅助函数，获取下一条记录的位置，条件：rmFileScan已经打开
 RC nextRec(RM_FileScan* rmFileScan)
 {
 	if (rmFileScan->pn == -1 && rmFileScan->sn == -1)
@@ -13,7 +12,7 @@ RC nextRec(RM_FileScan* rmFileScan)
 
 	PF_FileHandle* fileHandle;
 	PF_PageHandle pageHandle;
-	RC temp = GetFileHandle(fileHandle, fileID);
+	RC temp = GetFileHandle(&fileHandle, fileID);
 	if (temp != SUCCESS)
 		return temp;
 	int page, slot;
@@ -79,6 +78,132 @@ RC CloseScan(RM_FileScan* rmFileScan) {
 	return SUCCESS;
 }
 
+
+bool Match(Con* pCon, char* pData) {
+	switch (pCon->compOp)
+	{
+	case EQual:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l == r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l == r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) == 0;
+		}
+		break;
+	case LessT:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l < r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l < r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) < 0;
+		}
+		break;
+	case GreatT:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l > r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l > r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) > 0;
+		}
+		break;
+	case NEqual:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l != r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l != r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) != 0;
+		}
+		break;
+	case LEqual:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l <= r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l <= r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) <= 0;
+		}
+		break;
+	case GEqual:
+		if (pCon->attrType == ints)
+		{
+			int l = pCon->bLhsIsAttr == 1 ? *(int*)(pData + pCon->LattrOffset) : *(int*)(pCon->Lvalue);
+			int r = pCon->bRhsIsAttr == 1 ? *(int*)(pData + pCon->RattrOffset) : *(int*)(pCon->Rvalue);
+			return l >= r;
+		}
+		else if (pCon->attrType == floats)
+		{
+			float l = pCon->bLhsIsAttr == 1 ? *(float*)(pData + pCon->LattrOffset) : *(float*)(pCon->Lvalue);
+			float r = pCon->bRhsIsAttr == 1 ? *(float*)(pData + pCon->RattrOffset) : *(float*)(pCon->Rvalue);
+			return l >= r;
+		}
+		else {
+			char* l = pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char*)(pCon->Lvalue);
+			char* r = pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)(pCon->Rvalue);
+			return strcmp(l, r) >= 0;
+		}
+		break;
+	case NO_OP:
+		break;
+	default:
+		break;
+	}
+	return false;
+}
+
 /*
 获取一个符合扫描条件的记录。如果该方法成功，返回值rec应包含记录副本及记录标识符。如果没有发现满足扫描条件的记录，则返回RM_EOF。
 */
@@ -101,96 +226,7 @@ RC GetNextRec(RM_FileScan *rmFileScan, RM_Record *rec)
 		int i;
 		for (i = 0; i < rmFileScan->conNum; i++){
 			Con* pCon = rmFileScan->conditions + i;
-			bool isMatch = false;
-			switch (pCon->attrType){
-			case ints:
-				int l = pCon->bLhsIsAttr == 1 ? *(int*)pData + pCon->LattrOffset : *(int*)pCon->Lvalue;
-				int r = pCon->bRhsIsAttr == 1 ? *(int*)pData + pCon->RattrOffset : *(int*)pCon->Rvalue;
-				switch (pCon->compOp){
-				case EQual:
-					isMatch = (l == r);
-					break;
-				case LessT:
-					isMatch = (l < r);
-					break;
-				case GreatT:
-					isMatch = (l > r);
-					break;
-				case NEqual:
-					isMatch = (l != r);
-					break;
-				case LEqual:
-					isMatch = (l <= r);
-					break;
-				case GEqual:
-					isMatch = (l >= r);
-					break;
-				case NO_OP:
-					break;
-				default:
-					break;
-				}
-				break;
-			case floats:
-				float l = pCon->bLhsIsAttr == 1 ? *(float*)pData + pCon->LattrOffset : *(float*)pCon->Lvalue;
-				float r = pCon->bRhsIsAttr == 1 ? *(float*)pData + pCon->RattrOffset : *(float*)pCon->Rvalue;
-				switch (pCon->compOp) {
-				case EQual:
-					isMatch = (l == r);
-					break;
-				case LessT:
-					isMatch = (l < r);
-					break;
-				case GreatT:
-					isMatch = (l > r);
-					break;
-				case NEqual:
-					isMatch = (l != r);
-					break;
-				case LEqual:
-					isMatch = (l <= r);
-					break;
-				case GEqual:
-					isMatch = (l >= r);
-					break;
-				case NO_OP:
-					break;
-				default:
-					break;
-				}
-				break;
-			case chars:
-				char* lValue = (pCon->bLhsIsAttr == 1 ? pData + pCon->LattrOffset : (char *)pCon->Lvalue);
-				char* rValue = (pCon->bRhsIsAttr == 1 ? pData + pCon->RattrOffset : (char*)pCon->Rvalue);
-				switch (pCon->compOp) {
-				case EQual:
-					isMatch = (strcmp(lValue, rValue) == 0);
-					break;
-				case LessT:
-					isMatch = (strcmp(lValue, rValue) < 0);
-					break;
-				case GreatT:
-					isMatch = (strcmp(lValue, rValue) > 0);
-					break;
-				case NEqual:
-					isMatch = (strcmp(lValue, rValue) != 0);
-					break;
-				case LEqual:
-					isMatch = (strcmp(lValue, rValue) <= 0);
-					break;
-				case GEqual:
-					isMatch = (strcmp(lValue, rValue) >= 0);
-					break;
-				case NO_OP:
-					break;
-				default:
-					break;
-				}
-				break;
-			default:
-				break;
-			}
-			if (!isMatch){
+			if (!Match(pCon,pData)){
 				UnpinPage(&rmFileScan->PageHandle);
 				break;
 			}
@@ -221,7 +257,7 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec){
 	int fileID = fileHandle->fileDesc;
 	PF_FileHandle* pFileHandle;
 	PF_PageHandle pageHandle;
-	RC temp = GetFileHandle(pFileHandle, fileID);
+	RC temp = GetFileHandle(&pFileHandle, fileID);
 	if (temp != SUCCESS)
 		return temp;
 	int page = rid->pageNum, slot = rid->slotNum;
@@ -246,6 +282,15 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec){
 	return SUCCESS;
 }
 
+
+bool isFull(int slot, int slotNum, char* pData, PF_PageHandle* pageHandle) {
+	for (int i = slot; i < slotNum; ++i) {
+		if ((pageHandle->pFrame->page.pData[i / 8] & 1 << (i % 8)) == 0)//后续有空
+			return false;
+	}
+	return true;
+}
+
 /*
 插入一个新的记录到指定文件中，pData为指向新纪录内容的指针，返回该记录的标识符rid。
 */
@@ -253,7 +298,7 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid){
 	int fileID = fileHandle->fileDesc;
 	PF_FileHandle* pFileHandle;
 	PF_PageHandle pageHandle;
-	RC temp = GetFileHandle(pFileHandle, fileID);
+	RC temp = GetFileHandle(&pFileHandle, fileID);
 	if (temp != SUCCESS)
 		return temp;
 	int pageCount;
@@ -264,7 +309,7 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid){
 	int page, slot;
 	//找到可用的页
 	for (page = 0; page <= pageCount; ++page) {
-		if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) != 0 && (fileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0) {//已分配但未满的页
+		if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) != 0 && (fileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0) {//已分配且未满的页
 			break;
 		}
 	}
@@ -321,26 +366,72 @@ RC InsertRec(RM_FileHandle *fileHandle, char *pData, RID *rid){
 	
 }
 
-bool isFull(int slot,int slotNum,char *pData,PF_PageHandle *pageHandle) {
-	for (int i = slot; i < slotNum; ++i) {
-		if ((pageHandle->pFrame->page.pData[i / 8] & 1 << (i % 8)) == 0)//后续有空
-			return false;
-	}
-	return true;
-}
 
 
 
-RC DeleteRec(RM_FileHandle *fileHandle, const RID *rid)
-{
-	return FAIL;
+//从指定文件中删除标识符为rid的记录。
+RC DeleteRec(RM_FileHandle *fileHandle, const RID *rid){
+	int fileID = fileHandle->fileDesc;
+	PF_FileHandle* pFileHandle;
+	PF_PageHandle pageHandle;
+	RC temp = GetFileHandle(&pFileHandle, fileID);
+	if (temp != SUCCESS)
+		return temp;
+	int page = rid->pageNum, slot = rid->slotNum;
+	temp = GetThisPage(fileID, page, &pageHandle);
+	if (temp != SUCCESS)
+		return temp;
+	//rid记录page、slot不符合
+	if (rid->bValid == false || page <= 1 || page > pFileHandle->pFileSubHeader->pageCount || slot > fileHandle->fileSubHeader->recordsPerPage)
+		return RM_INVALIDRID;
+	//rid页为空或记录为空
+	if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0 || (pageHandle.pFrame->page.pData[slot / 8] & 1 << (slot % 8)) == 0)
+		return RM_INVALIDRID;
+
+	int offset = fileHandle->fileSubHeader->firstRecordOffset;
+	int size = fileHandle->fileSubHeader->recordSize;
+	int pos = offset + size * slot;
+
+	pageHandle.pFrame->page.pData[slot / 8] = pageHandle.pFrame->page.pData[slot / 8] & (~(1 << (slot % 8)));
+	fileHandle->pBitmap[page / 8] = (~(1 << (page % 8))) & fileHandle->pBitmap[page / 8];
+	fileHandle->fileSubHeader->nRecords--;
+	
+	MarkDirty(&pageHandle);
+	fileHandle->pHdrFrame->bDirty = true;
+	UnpinPage(&pageHandle);
+
+	return SUCCESS;
 }
 
 /*
 更新指定文件中的记录，rec指向的记录结构中的rid字段为要更新的记录的标识符，pData字段指向新的记录内容。
 */
-RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec)
-{
+RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
+	int fileID = fileHandle->fileDesc;
+	PF_FileHandle* pFileHandle;
+	PF_PageHandle pageHandle;
+	RC temp = GetFileHandle(&pFileHandle, fileID);
+	if (temp != SUCCESS)
+		return temp;
+	int page = rec->rid.pageNum, slot = rec->rid.slotNum;
+	temp = GetThisPage(fileID, page, &pageHandle);
+	if (temp != SUCCESS)
+		return temp;
+	//rid记录page、slot不符合
+	if (rec->rid.bValid == false || page <= 1 || page > pFileHandle->pFileSubHeader->pageCount || slot > fileHandle->fileSubHeader->recordsPerPage)
+		return RM_INVALIDRID;
+	//rid页为空或记录为空
+	if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0 || (pageHandle.pFrame->page.pData[slot / 8] & 1 << (slot % 8)) == 0)
+		return RM_INVALIDRID;
+	
+	int offset = fileHandle->fileSubHeader->firstRecordOffset;
+	int size = fileHandle->fileSubHeader->recordSize;
+	int pos = offset + size * slot;
+
+	memcpy(pageHandle.pFrame->page.pData + pos, rec->pData, size);
+	MarkDirty(&pageHandle);
+	fileHandle->pHdrFrame->bDirty = true;
+	UnpinPage(&pageHandle);
 	return FAIL;
 }
 
@@ -364,7 +455,7 @@ RC RM_CreateFile(char *fileName, int recordSize)
 		return temp;
 
 	char* bitMap = pageHandle->pFrame->page.pData + sizeRM;
-	bitMap[0] = 0x3;//0 1页为满
+	bitMap[0] |= 0x3;//0 1页为满
 
 	RM_FileSubHeader* fileSubHeader = (RM_FileSubHeader*)pageHandle->pFrame->page.pData;
 	fileSubHeader->nRecords = 0;

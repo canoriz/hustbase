@@ -79,7 +79,7 @@ const RC CloseFile(int FileID);
 const RC GetThisPage(int FileID,PageNum pageNum,PF_PageHandle *pageHandle);
 const RC AllocatePage(int FileID,PF_PageHandle *pageHandle);
 const RC GetPageNum(PF_PageHandle *pageHandle,PageNum *pageNum);
-const RC GetFileHandle(PF_FileHandle* fileHandle, int fileID);
+const RC GetFileHandle(PF_FileHandle** fileHandle, int fileID);
 const RC GetData(PF_PageHandle *pageHandle,char **pData);
 const RC DisposePage(int FileID,PageNum pageNum);
 

@@ -276,10 +276,10 @@ const RC GetPageNum(PF_PageHandle *pageHandle,PageNum *pageNum)
 	return SUCCESS;
 }
 
-const RC GetFileHandle(PF_FileHandle* fileHandle, int fileID) {
+const RC GetFileHandle(PF_FileHandle** fileHandle, int fileID) {
 	if (fileID < 0 || fileID >= MAX_OPEN_FILE || open_list[fileID] == nullptr)
 		return PF_ILLEGAL_FILE_ID;
-	fileHandle = open_list[fileID];
+	*fileHandle = open_list[fileID];
 	return SUCCESS;
 }
 
