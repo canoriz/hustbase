@@ -16,8 +16,14 @@ Result<TableMetaData, int> TableMetaData::open(const char* const path) {
 }
 
 bool TableMetaData::create_file(const char* const path) {
-	FILE* fp = fopen(path, "wb");
-	if (fp != NULL) {
+	FILE* fp = fopen(path, "r");
+	if (fp) {
+		// already exist
+		fclose(fp);
+		return false;
+	}
+	fp = fopen(path, "wb");
+	if (fp) {
 		fclose(fp);
 		return true;
 	}
@@ -40,12 +46,7 @@ bool TableMetaData::write() {
 		// not open
 		return false;
 	}
-	/*
-	FILE* f = fopen("C:\\Users\\caoyi\\Desktop\\DBMS\\HustBase-framework(2020)\\asdghgd\\error.txt", "wb");
-	int b = fwrite(&this->table, sizeof(TableRec), 1, f);
-	fclose(f);
-	int a = fwrite(&this->table, sizeof(TableRec), 1, this->file);
-	*/
+
 	if (1 != fwrite(&this->table, sizeof(TableRec), 1, this->file)) {
 		// write failed
 		return false;
@@ -57,6 +58,8 @@ bool TableMetaData::write() {
 			return false;
 		}
 	}
+
+	this->close();
 	return true;
 }
 

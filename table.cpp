@@ -14,7 +14,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	strcat(full_path, name);
 	if (!TableMetaData::create_file(full_path)) {
 		// failed create metadata
-		return Result<bool, RC>::Err(FAIL);
+		return Result<bool, RC>::Err(TABLE_EXIST);
 	}
 
 	auto res = TableMetaData::open(full_path);
@@ -39,6 +39,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		);
 		aggregate_size += tmp_attr.attrLength;
 	}
+	tmeta.table.size = aggregate_size;
 	if (!tmeta.write()) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);

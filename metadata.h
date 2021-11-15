@@ -11,6 +11,7 @@
 typedef struct TableRec {
 	char tablename[21];
 	int  attrcount;
+	int  size;
 } TableRec;
 
 
@@ -48,9 +49,6 @@ public:
 	TableMetaData() {
 		this->file = NULL;
 		this->table = TableRec();
-	}
-	~TableMetaData() {
-		this->close();
 	}
 
 	static Result<TableMetaData, int> open(const char* const path);

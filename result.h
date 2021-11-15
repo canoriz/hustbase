@@ -11,12 +11,12 @@ struct Result {
 	bool ok;
 	T result;
 	E err;
-	Result(bool _ok, T _result, E _err) {
+	Result(bool _ok, const T& _result, E _err) {
 		this->ok     = _ok;
 		this->result = _result;
 		this->err    = _err;
 	}
-	Result(T _result) {
+	Result(const T& _result) {
 		this->ok     = true;
 		this->result = _result;
 		this->err    = E();
@@ -26,7 +26,7 @@ struct Result {
 		this->result = T();
 		this->err    = E();
 	}
-	static Result<T, E> Ok(T _result) {
+	static Result<T, E> Ok(const T& _result) {
 		return Result<T, E>(_result);
 	}
 	static Result<T, E> Err(E _err) {
