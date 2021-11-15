@@ -4,7 +4,7 @@
 int CmpValue(AttrType attrType, char* keyval, char* value);
 
 //查找B+树中属性值可能有value的叶子节点，返回索引项所在页面的页面句柄、页面号和索引项编号
-RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHandle, PageNum* pn, int* ridIx);
+RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHandle, PageNum* pn);
 
 RC CreateIndex(const char* fileName, AttrType attrType, int attrLength)
 {
@@ -19,7 +19,6 @@ RC CreateIndex(const char* fileName, AttrType attrType, int attrLength)
 	if ((tmp = OpenFile((char*)fileName, &fileID)) != SUCCESS) {
 		return tmp;
 	}
-
 
 	//获取第一页，加入索引控制信息
 	PF_PageHandle* pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
@@ -44,13 +43,9 @@ RC CreateIndex(const char* fileName, AttrType attrType, int attrLength)
 	IXNode->rids = (RID*)(IXNode->keys + fileHeader->order * (2 * sizeof(RID) + attrLength));
 
 	//修改页面后调用PF中函数进行处理
-	if ((tmp = MarkDirty(pageHandle)) != SUCCESS) {
-		return tmp;
-	}
+	MarkDirty(pageHandle);
 
-	if ((tmp = UnpinPage(pageHandle)) != SUCCESS) {
-		return tmp;
-	}
+	UnpinPage(pageHandle);
 
 	free(pageHandle);
 
@@ -84,9 +79,7 @@ RC OpenIndex(const char* fileName, IX_IndexHandle* indexHandle)
 	indexHandle->fileID = fileID;
 	indexHandle->fileHeader = *(IX_FileHeader*)pageHandle->pFrame->page.pData;
 
-	if ((tmp = UnpinPage(pageHandle)) != SUCCESS) {
-		return tmp;
-	}
+	UnpinPage(pageHandle);
 
 	free(pageHandle);
 
@@ -110,11 +103,19 @@ RC CloseIndex(IX_IndexHandle* indexHandle)
 
 RC InsertEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 {
+	RC tmp;
+	AttrType attrType = indexHandle->fileHeader.attrType;
+	int attrLength = indexHandle->fileHeader.attrLength;
+	int keyLength = indexHandle->fileHeader.keyLength;
 	return RC();
 }
 
 RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 {
+	RC tmp;
+	AttrType attrType = indexHandle->fileHeader.attrType;
+	int attrLength = indexHandle->fileHeader.attrLength;
+	int keyLength = indexHandle->fileHeader.keyLength;
 	return RC();
 }
 
@@ -125,16 +126,85 @@ RC OpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, CompOp co
 	}
 
 	RC tmp;
+	PF_PageHandle pageHandle;
+	PageNum pn;
+	
+	tmp = FindeIXNode(indexHandle, value, &pageHandle, &pn);
+	if (tmp != SUCCESS) return tmp;
+
+	IX_Node* ixNode = (IX_Node*)(pageHandle.pFrame->page.pData + sizeof(IX_FileHeader));
+	AttrType attrType = indexHandle->fileHeader.attrType;
+	int attrLength = indexHandle->fileHeader.attrLength;
+	int keyLength = indexHandle->fileHeader.keyLength;
+	char* keyval = (char*)malloc(attrLength);
+
+	int ridIx = 0;
+	switch (indexScan->compOp)
+	{
+	case EQual:
+		break;
+	case LEqual:
+		pn = indexHandle->fileHeader.first_leaf;
+		break;
+	case NEqual:
+		return FAIL;
+		break;
+	case LessT:
+		pn = indexHandle->fileHeader.first_leaf;
+		break;
+	case GEqual:
+		while (ridIx < ixNode->keynum) {
+			memcpy(keyval, ixNode->keys + ridIx * keyLength, attrLength);
+			int result = CmpValue(attrType, keyval, value);
+			if (result < 0) {
+				ridIx++;
+			}
+			else {
+				break;
+			}
+		}
+		break;
+	case GreatT:
+		while (ridIx < ixNode->keynum) {
+			//如果读取到最后一个叶子节点的最后一个索引项，就返回EOF
+			if (ridIx == ixNode->keynum && ixNode->brother == 0) {
+				return FAIL;
+			}
+
+			//如果读到该节点最后一个索引项，就切换到下一页面
+			if (ridIx == ixNode->keynum) {
+				UnpinPage(&pageHandle);
+				if ((tmp = GetThisPage(indexHandle->fileID, ixNode->brother, &pageHandle)) != SUCCESS) {
+					return tmp;
+				}
+				pn = ixNode->brother;
+				ixNode = (IX_Node*)(pageHandle.pFrame->page.pData + sizeof(IX_FileHeader));
+				ridIx = 0;
+			}
+			memcpy(keyval, ixNode->keys + ridIx * keyLength, attrLength);
+			int result = CmpValue(attrType, keyval, value);
+			if (result <= 0) {
+				ridIx++;
+			}
+			else {
+				break;
+			}
+		}
+		break;
+	case NO_OP:
+		pn = indexHandle->fileHeader.first_leaf;
+		break;
+	default:
+		break;
+	}
+
 	indexScan->bOpen = true;
 	indexScan->pIXIndexHandle = indexHandle;
 	indexScan->compOp = compOp;
 	indexScan->value = value;
-
-	indexScan->pn = indexHandle->fileHeader.rootPage;
-
-	if ((tmp = GetThisPage(indexHandle->fileID, indexHandle->fileHeader.rootPage, &indexScan->PageHandle)) != SUCCESS) {
-		return tmp;
-	}
+	indexScan->PageHandle = pageHandle;
+	indexScan->pn = pn;
+	indexScan->ridIx = ridIx;
 
 	return SUCCESS;
 }
@@ -156,10 +226,7 @@ RC IX_GetNextEntry(IX_IndexScan* indexScan, RID* rid)
 
 	//如果读到该节点最后一个索引项，就切换到下一页面
 	if (indexScan->ridIx == ixNode->keynum) {
-		if ((tmp = UnpinPage(&indexScan->PageHandle)) != SUCCESS) {
-			return tmp;
-		}
-
+		UnpinPage(&indexScan->PageHandle);
 		if ((tmp = GetThisPage(indexScan->pIXIndexHandle->fileID, indexScan->pn, &indexScan->PageHandle)) != SUCCESS) {
 			return tmp;
 		}
@@ -221,9 +288,7 @@ RC CloseIndexScan(IX_IndexScan* indexScan)
 	RC tmp;
 	indexScan->bOpen = false;
 
-	if ((tmp = UnpinPage(&indexScan->PageHandle)) != SUCCESS) {
-		return tmp;
-	}
+	UnpinPage(&indexScan->PageHandle);
 
 	return SUCCESS;
 }
@@ -239,13 +304,22 @@ int CmpValue(AttrType attrType, char* keyval, char* value) {
 	switch (attrType)
 	{
 	case ints:
-		result = *(int*)keyval < *(int*)value;
+		result = *(int*)keyval - *(int*)value;
 		break;
 	case chars:
 		result = strcmp(keyval,value);
 		break;
 	case floats:
-		result = *(float*)keyval < *(float*)value;
+		float fres = *(float*)keyval - *(float*)value;
+		if (fres < 0) {
+			result = -1;
+		}
+		else if (fres > 0) {
+			result = 1;
+		}
+		else {
+			result = 0;
+		}
 		break;
 	default:
 		result = strcmp(keyval, value);
@@ -256,7 +330,7 @@ int CmpValue(AttrType attrType, char* keyval, char* value) {
 }
 
 
-RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHandle, PageNum* pn, int* ridIx) {
+RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHandle, PageNum* pn) {
 	//从根节点开始查找需要的值
 	PageNum _pn = indexHandle->fileHeader.rootPage;
 
@@ -280,6 +354,7 @@ RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHand
 			break;
 		}
 
+		//读取节点的属性值，与给的的值进行比较，属性值小于给定值就向后移动
 		int result = -1;
 		for (_ridIx = 0; _ridIx < ixNode->keynum; _ridIx++) {
 			memcpy(keyval, ixNode->keys + _ridIx * keyLength, attrLength);
@@ -287,15 +362,19 @@ RC FindeIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHand
 			if (result < 0) {
 				continue;
 			}
+			else if (result == 0){
+				break;
+			}
 			else {
+				if (_ridIx == 0) {
+					return IX_INVALIDKEY;
+				}
+				_ridIx--;
 				break;
 			}
 		}
-		if (_ridIx == 0) {
-			return IX_INVALIDKEY;
-		}
-		_ridIx--;
 		_pn = *(int*)(ixNode->rids + _ridIx);
+		UnpinPage(&_pageHandle);
 	} 
 	*pageHandle = _pageHandle;
 	free(keyval);
