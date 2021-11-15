@@ -299,7 +299,7 @@ RC GetIndexTree(char* fileName, Tree* index) {
 
 int CmpValue(AttrType attrType, char* keyval, char* value) {
 	int result;
-
+	float fres = *(float*)keyval - *(float*)value;
 	//根据数据类型获取比较结果
 	switch (attrType)
 	{
@@ -310,7 +310,6 @@ int CmpValue(AttrType attrType, char* keyval, char* value) {
 		result = strcmp(keyval,value);
 		break;
 	case floats:
-		float fres = *(float*)keyval - *(float*)value;
 		if (fres < 0) {
 			result = -1;
 		}
