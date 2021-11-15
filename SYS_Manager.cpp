@@ -91,6 +91,7 @@ bool DataBase::close() {
 }
 
 Result<bool, RC> DataBase::drop_table(const char* const table_name) {
+	// close if table is opened
 	for (auto it = this->opened_tables.begin(); it != this->opened_tables.end(); ++it) {
 		const int SAME = 0;
 		if (strcmp(table_name, it->name) == SAME) {
@@ -99,15 +100,23 @@ Result<bool, RC> DataBase::drop_table(const char* const table_name) {
 			this->opened_tables.erase(it);
 		}
 	}
-	// not opened table
-	return Result<bool, RC>(true);
+
+	// table closed
 	char full_path[PATH_SIZE] = "";
 	this->prefix_root(full_path, table_name);
 	const int OK = 0;
-	if (remove(full_path) == OK) {
-		return Result<bool, RC>::Ok(true);
+
+	if (remove(full_path) != OK) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
 	}
-	return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+
+	char meta_name[PATH_SIZE] = ".";
+	strcat(meta_name, table_name);
+	this->prefix_root(full_path, meta_name);
+	if (remove(full_path) != OK) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::add_table(char* const table_name, int count, AttrInfo* attrs)
@@ -131,6 +140,7 @@ RC execute(char * sql) {
 
 	if (rc == SUCCESS) {
 		createTable* new_table = &(processing_sql->sstr.cret);
+		dropTable* drop_table = &(processing_sql->sstr.drt);
 		switch (processing_sql->flag) {
 		case 1:
 			//判断SQL语句为select语句
@@ -155,6 +165,7 @@ RC execute(char * sql) {
 
 		case 6:
 			//判断SQL语句为dropTable语句
+			return DropTable(drop_table->relName);
 			break;
 
 		case 7:
@@ -173,12 +184,12 @@ RC execute(char * sql) {
 			//判断为exit语句，可以由此进行退出操作
 			break;
 		}
+		return rc;
 	}
 	else {
 		//fprintf(stderr, "SQL Errors: %s", sql_str->sstr.errors);
 		return rc;
 	}
-
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
@@ -243,7 +254,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 }
 
 RC DropTable(char *relName) {
-	// only delete table, not delete .table
+	// delete table, .table
 	auto res = working_db.drop_table(relName);
 	if (res.ok) {
 		return SUCCESS;
