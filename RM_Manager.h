@@ -30,9 +30,23 @@ typedef struct
 }Con;
 
 
+typedef struct {
+	int nRecords;			//当前文件中包含的记录数
+	int recordSize;			//每个记录的大小
+	int recordsPerPage;		//每个页面可以装载的记录数量
+	int firstRecordOffset;	//每页第一个记录在数据区中的开始位置
+} RM_FileSubHeader;
+
+
+
 typedef struct __RM_FileHandle {//文件句柄
 	bool bOpen;//句柄是否打开（是否正在被使用）
-	//TODO: 需要自定义其内部结构
+	char* fileName;//句柄文件名
+	int fileDesc;//与该句柄关联的文件描述符
+	Frame* pHdrFrame;		//指向该文件头帧（控制页对应的帧）的指针
+	Page* pHdrPage;		//指向该文件头页（控制页）的指针
+	char* pBitmap;		//指向控制页中位图的指针
+	RM_FileSubHeader* fileSubHeader;
 	__RM_FileHandle() 
 	{
 		bOpen = false;
@@ -49,7 +63,6 @@ typedef struct __RM_FileScan {
 	PF_PageHandle  PageHandle; //处理中的页面句柄
 	PageNum  pn; 	//扫描即将处理的页面号
 	SlotNum  sn;		//扫描即将处理的插槽号
-
 	__RM_FileScan()
 	{
 		bOpen = false;

@@ -40,7 +40,7 @@ const RC CreateFile(const char *fileName)
 PF_FileHandle * getPF_FileHandle(void )
 {
 	PF_FileHandle *p=(PF_FileHandle *)malloc(sizeof( PF_FileHandle));
-	p->bopen=false;
+	p->bOpen=false;
 	return p;
 }
 
@@ -64,7 +64,7 @@ const RC OpenFile(char *fileName,int * FileID)
 	RC tmp;
 	if((fd=_open(fileName,O_RDWR|_O_BINARY))<0)
 		return PF_FILEERR;
-	pfilehandle->bopen=true;
+	pfilehandle->bOpen=true;
 	pfilehandle->fileName=fileName;
 	pfilehandle->fileDesc=fd;
 	if((tmp=AllocateBlock(&pfilehandle->pHdrFrame))!=SUCCESS){
@@ -273,6 +273,13 @@ const RC GetPageNum(PF_PageHandle *pageHandle,PageNum *pageNum)
 	if(pageHandle->bOpen==false)
 		return PF_PHCLOSED;
 	*pageNum=pageHandle->pFrame->page.pageNum;
+	return SUCCESS;
+}
+
+const RC GetFileHandle(PF_FileHandle** fileHandle, int fileID) {
+	if (fileID < 0 || fileID >= MAX_OPEN_FILE || open_list[fileID] == nullptr)
+		return PF_ILLEGAL_FILE_ID;
+	*fileHandle = open_list[fileID];
 	return SUCCESS;
 }
 

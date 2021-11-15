@@ -40,15 +40,16 @@ typedef struct{
 	Page page;
 }Frame;
 
-typedef struct{
-	bool bopen;
-	char *fileName;
-	int fileDesc;
-	Frame *pHdrFrame;
-	Page *pHdrPage;
-	char *pBitmap;
-	PF_FileSubHeader *pFileSubHeader;
-}PF_FileHandle;
+typedef struct {
+	bool bOpen;			//该文件句柄是否已经与一个文件关联
+	char* fileName;			//与该句柄关联的文件名
+	int  fileDesc;			//与该句柄关联的文件描述符
+	Frame* pHdrFrame;		//指向该文件头帧（控制页对应的帧）的指针
+	Page* pHdrPage;		//指向该文件头页（控制页）的指针
+	char* pBitmap;		//指向控制页中位图的指针
+	PF_FileSubHeader *pFileSubHeader;	//该文件的PF_FileSubHeader结构
+} PF_FileHandle;
+	
 
 typedef struct __BF_Manager {
 	int nReads;
@@ -78,7 +79,7 @@ const RC CloseFile(int FileID);
 const RC GetThisPage(int FileID,PageNum pageNum,PF_PageHandle *pageHandle);
 const RC AllocatePage(int FileID,PF_PageHandle *pageHandle);
 const RC GetPageNum(PF_PageHandle *pageHandle,PageNum *pageNum);
-
+const RC GetFileHandle(PF_FileHandle** fileHandle, int fileID);
 const RC GetData(PF_PageHandle *pageHandle,char **pData);
 const RC DisposePage(int FileID,PageNum pageNum);
 
