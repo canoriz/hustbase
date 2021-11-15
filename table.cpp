@@ -47,6 +47,9 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 
 	RC table = FAIL;
 
+	strcpy(full_path, path);
+	strcat(full_path, "\\");
+	strcat(full_path, name);
 	table = RM_CreateFile(path, aggregate_size);
 	if (table != SUCCESS) {
 		return Result<bool, RC>::Err(table);
