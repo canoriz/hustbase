@@ -28,13 +28,14 @@ typedef struct {
 	RID* rids;					//指向指针区的指针
 }IX_Node;
 
-typedef struct{
-	bool bOpen;		/*扫描是否打开 */
-	IX_IndexHandle *pIXIndexHandle;	//指向索引文件操作的指针
-	CompOp compOp;  /* 用于比较的操作符*/
-	char *value;		 /* 与属性行比较的值 */
-    PF_PageHandle pfPageHandles[PF_BUFFER_SIZE]; // 固定在缓冲区页面所对应的页面操作列表
-	PageNum pnNext; 	//下一个将要被读入的页面号
+typedef struct {
+	bool bOpen;						//扫描是否打开
+	IX_IndexHandle* pIXIndexHandle;	//指向索引文件句柄的指针
+	CompOp compOp;  				//用于比较的操作符
+	char* value;		 				//与属性值进行比较的值
+	PF_PageHandle  PageHandle;		//处理中的页面句柄
+	PageNum  pn; 	//扫描即将处理的页面号
+	int  ridIx;			//扫描即将处理的索引项编号
 }IX_IndexScan;
 
 typedef struct Tree_Node{
