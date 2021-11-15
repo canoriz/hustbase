@@ -23,10 +23,14 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		return Result<bool, RC>::Err(FAIL);
 	}
 
+	// store metadata
+	TableMetaData tmeta = res.result;
+	tmeta.table.attrcount = count;
+	strcpy(tmeta.table.tablename, name);
 	int aggregate_size = 0;
 	for (auto i = 0; i < count; i++) {
 		AttrInfo tmp_attr = attrs[i];
-		res.result.columns.push_back(
+		tmeta.columns.push_back(
 			ColumnRec(
 				tmp_attr.attrName, tmp_attr.attrType,
 				tmp_attr.attrLength, aggregate_size,
@@ -35,7 +39,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		);
 		aggregate_size += tmp_attr.attrLength;
 	}
-	if (!res.result.write()) {
+	if (!tmeta.write()) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);
 	}

@@ -8,7 +8,7 @@
 
 Result<TableMetaData, int> TableMetaData::open(const char* const path) {
 	TableMetaData metadata;
-	metadata.file = fopen(path, "rb");
+	metadata.file = fopen(path, "a+b");
 	if (metadata.file != NULL) {
 		return Result<TableMetaData, int>::Ok(metadata);
 	}
@@ -40,6 +40,12 @@ bool TableMetaData::write() {
 		// not open
 		return false;
 	}
+	/*
+	FILE* f = fopen("C:\\Users\\caoyi\\Desktop\\DBMS\\HustBase-framework(2020)\\asdghgd\\error.txt", "wb");
+	int b = fwrite(&this->table, sizeof(TableRec), 1, f);
+	fclose(f);
+	int a = fwrite(&this->table, sizeof(TableRec), 1, this->file);
+	*/
 	if (1 != fwrite(&this->table, sizeof(TableRec), 1, this->file)) {
 		// write failed
 		return false;
@@ -56,7 +62,7 @@ bool TableMetaData::write() {
 
 void TableMetaData::close() {
 	if (this->file) {
-		fclose(file);
+		fclose(this->file);
 		this->file = NULL;
 	}
 }

@@ -123,60 +123,62 @@ DataBase working_db;
 
 
 RC execute(char * sql) {
-	return FAIL;
-/*
-	sqlstr *sql_str = NULL;
+
+	sqlstr *processing_sql = NULL;
 	RC rc;
-	sql_str = get_sqlstr();
-	rc = parse(sql, sql_str);//只有两种返回结果SUCCESS和SQL_SYNTAX
+	processing_sql = get_sqlstr();
+	rc = parse(sql, processing_sql);//只有两种返回结果SUCCESS和SQL_SYNTAX
 
 	if (rc == SUCCESS) {
-		switch (sql_str->flag) {
-			//case 1:
+		createTable* new_table = &(processing_sql->sstr.cret);
+		switch (processing_sql->flag) {
+		case 1:
 			//判断SQL语句为select语句
-			//break;
+			break;
 
-			case 2:
+		case 2:
 			//判断SQL语句为insert语句
 			break;
 
-			case 3:	
+		case 3:
 			//判断SQL语句为update语句
 			break;
 
-			case 4:					
+		case 4:
 			//判断SQL语句为delete语句
 			break;
 
-			case 5:
+		case 5:
 			//判断SQL语句为createTable语句
+			return CreateTable(new_table->relName, new_table->attrCount, new_table->attributes);
 			break;
 
-			case 6:	
+		case 6:
 			//判断SQL语句为dropTable语句
 			break;
 
-			case 7:
+		case 7:
 			//判断SQL语句为createIndex语句
 			break;
-	
-			case 8:	
+
+		case 8:
 			//判断SQL语句为dropIndex语句
 			break;
-			
-			case 9:
+
+		case 9:
 			//判断为help语句，可以给出帮助提示
 			break;
-		
-			case 10: 
+
+		case 10:
 			//判断为exit语句，可以由此进行退出操作
-			break;		
+			break;
+		}
 	}
 	else {
 		//fprintf(stderr, "SQL Errors: %s", sql_str->sstr.errors);
 		return rc;
 	}
-*/
+
 }
 
 RC CreateDB(char *dbpath, char *dbname) {
