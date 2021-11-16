@@ -64,9 +64,13 @@ Result<Table, RC> Table::open(char* path, char* name) {
 	strcpy(full_path, path);
 	strcat(full_path, "\\.");
 	strcat(full_path, name);
-	Result<TableMetaData, int> tmeta = TableMetaData::open(full_path);
-	if (!tmeta.ok) {
+	Result<TableMetaData, int> open = TableMetaData::open(full_path);
+	if (!open.ok) {
 		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+	auto& tmeta = open.result;
+	if (!tmeta.read()) {
+		return Result<Table, RC>::Err(FAIL);
 	}
 
 	// table path
@@ -74,7 +78,7 @@ Result<Table, RC> Table::open(char* path, char* name) {
 	strcat(full_path, "\\");
 	strcat(full_path, name);
 	Table t;
-	t.meta = tmeta.result;
+	t.meta = tmeta;
 	RC res = RM_OpenFile(full_path, &t.file);
 	if (res == SUCCESS) {
 		strcpy(t.name, name);

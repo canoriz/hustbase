@@ -480,7 +480,6 @@ RC RM_CreateFile(char *fileName, int recordSize)
 */
 RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 {
-	return FAIL;
 	int sizeRM = sizeof(RM_FileSubHeader);
 	PF_FileHandle* pfHandle = (PF_FileHandle*)malloc(sizeof(PF_FileHandle));
 	int fileID;

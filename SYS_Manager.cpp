@@ -175,7 +175,10 @@ Result<bool, RC> DataBase::add_index(
 		this->sysroot, index_name, table_name, column_name,
 		(AttrType)column_record->attrtype, column_record->attrlength
 	);
-	return Result<bool, RC>::Err(FAIL);
+	if (!res.ok) {
+		return Result<bool, RC>::Err(FAIL);
+	}
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::drop_index(char* const index_name) {
@@ -208,9 +211,7 @@ Result<Table, RC> DataBase::open_table(char* const table_name) {
 		}
 	}
 	// not in opened tables
-	char full_path[PATH_SIZE] = "";
-	this->prefix_root(full_path, table_name);
-	auto res = Table::open(full_path, table_name);
+	auto res = Table::open(this->sysroot, table_name);
 	if (res.ok) {
 		this->opened_tables.push_back(res.result);
 		return Result<Table, RC>::Ok(res.result);

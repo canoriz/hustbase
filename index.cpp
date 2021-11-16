@@ -27,7 +27,7 @@ Result<bool, RC> Index::create(char* path, char* iname, char* tname, char* cname
 
 	strcpy(imeta.index.indexname, iname);
 	strcpy(imeta.index.tablename, tname);
-	strcpy(imeta.index.columnname, tname);
+	strcpy(imeta.index.columnname, cname);
 	if (!imeta.write()) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);
