@@ -126,6 +126,7 @@ bool DataBase::close_table(const char* const table_name) {
 			// removed it from opened tables, and there should be no more to remove
 			it->close();
 			this->opened_tables.erase(it);
+			break;
 		}
 	}
 	return true;
@@ -138,6 +139,7 @@ bool DataBase::close_index(const char* const index_name) {
 			// removed it from opened tables, and there should be no more to remove
 			it->close();
 			this->opened_indices.erase(it);
+			break;
 		}
 	}
 	return true;
@@ -178,16 +180,28 @@ Result<bool, RC> DataBase::add_index(
 	if (!res.ok) {
 		return Result<bool, RC>::Err(FAIL);
 	}
-	return Result<bool, RC>::Ok(true);
+
+	for (auto& t : this->opened_tables) {
+		const int SAME = 0;
+		if (strcmp(t.name, table_name) == SAME) {
+			t.add_index_flag_on(column_name);
+			return Result<bool, RC>::Ok(true);
+		}
+	}
+	return Result<bool, RC>::Err(FAIL);
 }
 
 Result<bool, RC> DataBase::drop_index(char* const index_name) {
-	//TODO: remove ix_flag in table
 	auto i_res = this->open_index(index_name);
 	if (!i_res.ok) {
 		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
 	}
 	Index& i = i_res.result;
+	/*
+	if (!i.read()) {
+		return Result<bool, RC>::Err(FAIL);
+	}
+	*/
 	auto t_res = this->open_table(i.table);
 	if (!t_res.ok) {
 		// the table that has index is not exist
@@ -227,9 +241,7 @@ Result<Index, RC> DataBase::open_index(char* const index_name) {
 		}
 	}
 	// not in opened indices
-	char full_path[PATH_SIZE] = "";
-	this->prefix_root(full_path, index_name);
-	auto res = Index::open(full_path, index_name);
+	auto res = Index::open(this->sysroot, index_name);
 	if (res.ok) {
 		this->opened_indices.push_back(res.result);
 		return Result<Index, RC>::Ok(res.result);

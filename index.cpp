@@ -51,9 +51,13 @@ Result<Index, RC> Index::open(char* path, char* name) {
 	strcpy(full_path, path);
 	strcat(full_path, "\\.");
 	strcat(full_path, name);
-	Result<IndexMetaData, int> imeta = IndexMetaData::open(full_path);
-	if (!imeta.ok) {
+	Result<IndexMetaData, int> open = IndexMetaData::open(full_path);
+	if (!open.ok) {
 		return Result<Index, RC>::Err(INDEX_NOT_EXIST);
+	}
+	auto& imeta = open.result;
+	if (!imeta.read()) {
+		return Result<Index, RC>::Err(FAIL);
 	}
 
 	// table path
@@ -61,12 +65,12 @@ Result<Index, RC> Index::open(char* path, char* name) {
 	strcat(full_path, "\\");
 	strcat(full_path, name);
 	Index i;
-	i.meta = imeta.result;
+	i.meta = imeta;
 	RC res = OpenIndex(full_path, &i.file);
 	if (res == SUCCESS) {
 		strcpy(i.name, name);
 		strcpy(i.table, i.meta.index.tablename);
-		strcpy(i.table, i.meta.index.columnname);
+		strcpy(i.column, i.meta.index.columnname);
 		return Result<Index, RC>::Ok(i);
 	}
 	return Result<Index, RC>::Err(res);

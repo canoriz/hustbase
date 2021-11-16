@@ -28,6 +28,7 @@ public:
 	bool close();
 	bool destroy();
 	Result<bool, RC> remove_index_flag_on(char* const column);
+	Result<bool, RC> add_index_flag_on(char* const column);
 	Result<ColumnRec*, RC> get_column(char* const column);
 };
 
