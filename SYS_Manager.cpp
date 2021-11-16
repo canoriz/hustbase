@@ -24,6 +24,7 @@ private:
 
 private:
 	void prefix_root(char* dest, const char* const subdir);
+	bool close_table(const char* const table_name);
 
 public:
 	DataBase(const char* const dbpath = "") {
@@ -38,7 +39,7 @@ public:
 	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
 	Result<bool, RC> add_index(char* const table_name, char* const column_name, char* const index_name);
 	Result<bool, RC> drop_index(char* const index_name);
-	Result<bool, RC> open_table(char* const table_name);
+	Result<Table, RC> open_table(char* const table_name);
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
@@ -116,8 +117,7 @@ Result<bool, RC> DataBase::remove_file(const char* const file_name) {
 	return Result<bool, RC>::Ok(true);
 }
 
-Result<bool, RC> DataBase::drop_table(const char* const table_name) {
-	// close if table is opened
+bool DataBase::close_table(const char* const table_name) {
 	for (auto it = this->opened_tables.begin(); it != this->opened_tables.end(); ++it) {
 		const int SAME = 0;
 		if (strcmp(table_name, it->name) == SAME) {
@@ -126,7 +126,11 @@ Result<bool, RC> DataBase::drop_table(const char* const table_name) {
 			this->opened_tables.erase(it);
 		}
 	}
-	// table closed
+	return true;
+}
+
+Result<bool, RC> DataBase::drop_table(const char* const table_name) {
+	this->close_table(table_name);
 	return this->remove_file(table_name);
 }
 
@@ -152,9 +156,23 @@ Result<bool, RC> DataBase::drop_index(char* const index_name) {
 	return Result<bool, RC>::Err(FAIL);
 }
 
-Result<bool, RC> DataBase::open_table(char* const table_name) {
+Result<Table, RC> DataBase::open_table(char* const table_name) {
 	// TODO
-	return Result<bool, RC>::Err(FAIL);
+	for (auto const& t : this->opened_tables) {
+		const int SAME = 0;
+		if (strcmp(table_name, t.name) == SAME) {
+			return t;
+		}
+	}
+	// not in opened tables
+	char full_path[PATH_SIZE] = "";
+	this->prefix_root(full_path, table_name);
+	auto res = Table::open(full_path, table_name);
+	if (res.ok) {
+		this->opened_tables.push_back(res.result);
+		return Result<Table, RC>::Ok(res.result);
+	}
+	return Result<Table, RC>::Err(res.err);
 }
 
 DataBase working_db;

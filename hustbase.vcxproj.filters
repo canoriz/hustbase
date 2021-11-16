@@ -110,5 +110,8 @@
     <ClCompile Include="table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="index.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

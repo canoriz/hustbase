@@ -188,6 +188,7 @@
   <ItemGroup>
     <ClCompile Include="DBTest.cpp" />
     <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="index.cpp" />
     <ClCompile Include="IX_Manager.cpp" />
     <ClCompile Include="lex.yy.c" />
     <ClCompile Include="metadata.cpp" />
