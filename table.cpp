@@ -104,6 +104,7 @@ bool Table::remove_index_flag_on(char* const column)
 		if (strcmp(c.attrname, column) == SAME) {
 			if (c.ix_flag) {
 				c.ix_flag = false;
+				this->dirty = true;
 				return true;
 			}
 			else {
@@ -121,6 +122,7 @@ bool Table::add_index_flag_on(char* const column, char* const index)
 		if (strcmp(c.attrname, column) == SAME) {
 			if (!c.ix_flag) {
 				c.ix_flag = true;
+				this->dirty = true;
 				strcpy(c.indexname, index);
 				return true;
 			}

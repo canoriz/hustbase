@@ -14,6 +14,7 @@
 
 class Table {
 public:
+	bool dirty = false;
 	TableMetaData meta;
 	char name[21];
 	RM_FileHandle file;
