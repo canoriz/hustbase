@@ -92,3 +92,32 @@ bool Table::destroy() {
 	//TODO
 	return true;
 }
+
+Result<bool, RC> Table::remove_index_flag_on(char* const column)
+{
+	for(auto &c: this->meta.columns) {
+		const int SAME = 0;
+		if (strcmp(c.attrname, column) == SAME) {
+			if (c.ix_flag) {
+				c.ix_flag = false;
+				//TODO: this->file has closed
+				return this->meta.write();
+			}
+			else {
+				return false;
+			}
+		}
+	}
+	return Result<bool, RC>();
+}
+
+Result<ColumnRec*, RC> Table::get_column(char* const column)
+{
+	for (auto& c : this->meta.columns) {
+		const int SAME = 0;
+		if (strcmp(c.attrname, column) == SAME) {
+			return Result<ColumnRec*, RC>::Ok(&c);
+		}
+	}
+	return Result<ColumnRec*, RC>::Err(FAIL);
+}

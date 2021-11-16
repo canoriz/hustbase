@@ -18,11 +18,13 @@ private:
 
 public:
 	char name[21];
+	char table[21];
+	char column[21];
 	IX_IndexHandle file;
 
 public:
 	Index() :name("") {}
-	static Result<bool, RC>  create(char* path, char* iname, char* tname, AttrType atype, int attrlen);
+	static Result<bool, RC>  create(char* path, char* iname, char* tname, char* cname, AttrType atype, int attrlen);
 	static Result<Index, RC> open(char* path, char* name);
 
 public:

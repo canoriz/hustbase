@@ -5,7 +5,7 @@
 
 const int PATH_SIZE = 320;
 
-Result<bool, RC> Index::create(char* path, char* iname, char* tname, AttrType atype, int attrlen) {
+Result<bool, RC> Index::create(char* path, char* iname, char* tname, char* cname, AttrType atype, int attrlen) {
 	// metadata path
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, path);
@@ -27,6 +27,7 @@ Result<bool, RC> Index::create(char* path, char* iname, char* tname, AttrType at
 
 	strcpy(imeta.index.indexname, iname);
 	strcpy(imeta.index.tablename, tname);
+	strcpy(imeta.index.columnname, tname);
 	if (!imeta.write()) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);
@@ -64,6 +65,8 @@ Result<Index, RC> Index::open(char* path, char* name) {
 	RC res = OpenIndex(full_path, &i.file);
 	if (res == SUCCESS) {
 		strcpy(i.name, name);
+		strcpy(i.table, i.meta.index.tablename);
+		strcpy(i.table, i.meta.index.columnname);
 		return Result<Index, RC>::Ok(i);
 	}
 	return Result<Index, RC>::Err(res);

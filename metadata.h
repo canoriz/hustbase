@@ -11,6 +11,7 @@
 typedef struct IndexRec {
 	char indexname[21];
 	char tablename[21];
+	char columnname[21];
 } IndexRec;
 
 typedef struct TableRec {

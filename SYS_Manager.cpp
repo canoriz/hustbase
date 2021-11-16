@@ -25,6 +25,7 @@ private:
 private:
 	void prefix_root(char* dest, const char* const subdir);
 	bool close_table(const char* const table_name);
+	bool close_index(const char* const index_name);
 
 public:
 	DataBase(const char* const dbpath = "") {
@@ -40,6 +41,7 @@ public:
 	Result<bool, RC> add_index(char* const table_name, char* const column_name, char* const index_name);
 	Result<bool, RC> drop_index(char* const index_name);
 	Result<Table, RC> open_table(char* const table_name);
+	Result<Index, RC> open_index(char* const index_name);
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
@@ -129,6 +131,18 @@ bool DataBase::close_table(const char* const table_name) {
 	return true;
 }
 
+bool DataBase::close_index(const char* const index_name) {
+	for (auto it = this->opened_indices.begin(); it != this->opened_indices.end(); ++it) {
+		const int SAME = 0;
+		if (strcmp(index_name, it->name) == SAME) {
+			// removed it from opened tables, and there should be no more to remove
+			it->close();
+			this->opened_indices.erase(it);
+		}
+	}
+	return true;
+}
+
 Result<bool, RC> DataBase::drop_table(const char* const table_name) {
 	this->close_table(table_name);
 	return this->remove_file(table_name);
@@ -147,17 +161,46 @@ Result<bool, RC> DataBase::add_index(
 		char* const table_name,
 		char* const column_name,
 		char* const index_name) {
-	//TODO
+	auto t_res = this->open_table(table_name);
+	if (!t_res.ok) {
+		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
+	}
+	auto& t = t_res.result;
+	auto c_res = t.get_column(column_name);
+	if (!c_res.ok) {
+		return Result<bool, RC>::Err(c_res.err);
+	}
+	auto column_record = c_res.result;
+	auto res = Index::create(
+		this->sysroot, index_name, table_name, column_name,
+		(AttrType)column_record->attrtype, column_record->attrlength
+	);
 	return Result<bool, RC>::Err(FAIL);
 }
 
 Result<bool, RC> DataBase::drop_index(char* const index_name) {
-	//TODO
-	return Result<bool, RC>::Err(FAIL);
+	//TODO: remove ix_flag in table
+	auto i_res = this->open_index(index_name);
+	if (!i_res.ok) {
+		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
+	}
+	Index& i = i_res.result;
+	auto t_res = this->open_table(i.table);
+	if (!t_res.ok) {
+		// the table that has index is not exist
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+	Table& t = t_res.result;
+	auto r_res = t.remove_index_flag_on(i.column);
+	if (!r_res.ok) {
+		// index remove failed
+		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
+	}
+	this->close_index(index_name);
+	return this->remove_file(index_name);
 }
 
 Result<Table, RC> DataBase::open_table(char* const table_name) {
-	// TODO
 	for (auto const& t : this->opened_tables) {
 		const int SAME = 0;
 		if (strcmp(table_name, t.name) == SAME) {
@@ -175,6 +218,24 @@ Result<Table, RC> DataBase::open_table(char* const table_name) {
 	return Result<Table, RC>::Err(res.err);
 }
 
+Result<Index, RC> DataBase::open_index(char* const index_name) {
+	for (auto const& i : this->opened_indices) {
+		const int SAME = 0;
+		if (strcmp(index_name, i.name) == SAME) {
+			return i;
+		}
+	}
+	// not in opened indices
+	char full_path[PATH_SIZE] = "";
+	this->prefix_root(full_path, index_name);
+	auto res = Index::open(full_path, index_name);
+	if (res.ok) {
+		this->opened_indices.push_back(res.result);
+		return Result<Index, RC>::Ok(res.result);
+	}
+	return Result<Index, RC>::Err(res.err);
+}
+
 DataBase working_db;
 
 
@@ -188,6 +249,8 @@ RC execute(char * sql) {
 	if (rc == SUCCESS) {
 		createTable* new_table = &(processing_sql->sstr.cret);
 		dropTable* drop_table = &(processing_sql->sstr.drt);
+		createIndex* create_index = &(processing_sql->sstr.crei);
+		dropIndex* drop_index = &(processing_sql->sstr.dri);
 		switch (processing_sql->flag) {
 		case 1:
 			//判断SQL语句为select语句
@@ -217,10 +280,12 @@ RC execute(char * sql) {
 
 		case 7:
 			//判断SQL语句为createIndex语句
+			return CreateIndex(create_index->indexName, create_index->relName, create_index->attrName);
 			break;
 
 		case 8:
 			//判断SQL语句为dropIndex语句
+			return DropIndex(drop_index->indexName);
 			break;
 
 		case 9:
@@ -314,11 +379,19 @@ RC IndexExist(char *relName, char *attrName, RM_Record *rec) {
 }
 
 RC CreateIndex(char *indexName, char *relName, char *attrName) {
-	return FAIL;
+	auto res = working_db.add_index(relName, attrName, indexName);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 
 RC DropIndex(char *indexName) {
-	return FAIL;
+	auto res = working_db.drop_index(indexName);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 
 RC Insert(char *relName, int nValues, Value * values) {
