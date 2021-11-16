@@ -36,7 +36,7 @@ public:
 	bool in_use();
 	bool close();
 	Result<bool, RC> remove_file(const char* const file_name);
-	Result<bool, RC> drop_table(const char* const table_name);
+	Result<bool, RC> drop_table(char* const table_name);
 	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
 	Result<bool, RC> add_index(char* const table_name, char* const column_name, char* const index_name);
 	Result<bool, RC> drop_index(char* const index_name);
@@ -126,7 +126,7 @@ bool DataBase::close_table(const char* const table_name) {
 			// removed it from opened tables, and there should be no more to remove
 			it->close();
 			this->opened_tables.erase(it);
-			break;
+			return true;
 		}
 	}
 	return true;
@@ -145,7 +145,20 @@ bool DataBase::close_index(const char* const index_name) {
 	return true;
 }
 
-Result<bool, RC> DataBase::drop_table(const char* const table_name) {
+Result<bool, RC> DataBase::drop_table(char* const table_name) {
+	auto open = this->open_table(table_name);
+	if (!open.ok) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+	Table& t = open.result;
+	for (auto& c : t.meta.columns) {
+		if (c.ix_flag) {
+			auto res = this->drop_index(c.indexname);
+			if (!res.ok) {
+				return Result<bool, RC>::Err(res.err);
+			}
+		}
+	}
 	this->close_table(table_name);
 	return this->remove_file(table_name);
 }
@@ -184,7 +197,14 @@ Result<bool, RC> DataBase::add_index(
 	for (auto& t : this->opened_tables) {
 		const int SAME = 0;
 		if (strcmp(t.name, table_name) == SAME) {
-			t.add_index_flag_on(column_name);
+			t.add_index_flag_on(column_name, index_name);
+
+			// update table metadata to file
+			char meta_path[PATH_SIZE] = "";
+			this->prefix_root(meta_path, ".");
+			strcat(meta_path, t.name);
+			t.store_metadata_to(meta_path);
+
 			return Result<bool, RC>::Ok(true);
 		}
 	}
@@ -196,25 +216,32 @@ Result<bool, RC> DataBase::drop_index(char* const index_name) {
 	if (!i_res.ok) {
 		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
 	}
+
 	Index& i = i_res.result;
-	/*
-	if (!i.read()) {
-		return Result<bool, RC>::Err(FAIL);
-	}
-	*/
 	auto t_res = this->open_table(i.table);
 	if (!t_res.ok) {
 		// the table that has index is not exist
 		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
 	}
-	Table& t = t_res.result;
-	auto r_res = t.remove_index_flag_on(i.column);
-	if (!r_res.ok) {
-		// index remove failed
-		return Result<bool, RC>::Err(INDEX_NOT_EXIST);
+
+	for (auto& t : this->opened_tables) {
+		const int SAME = 0;
+		if (strcmp(t.name, i.table) == SAME) {
+			t.remove_index_flag_on(i.column);
+
+			// update table metadata to file
+			char meta_path[PATH_SIZE] = "";
+			this->prefix_root(meta_path, ".");
+			strcat(meta_path, t.name);
+			t.store_metadata_to(meta_path);
+
+			if (!this->close_index(index_name)) {
+				return Result<bool, RC>::Err(INDEX_NOT_EXIST);
+			}
+			return this->remove_file(index_name);
+		}
 	}
-	this->close_index(index_name);
-	return this->remove_file(index_name);
+	return Result<bool, RC>::Err(INDEX_NOT_EXIST);
 }
 
 Result<Table, RC> DataBase::open_table(char* const table_name) {

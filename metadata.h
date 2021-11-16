@@ -60,7 +60,7 @@ public:
 	static Result<TableMetaData, int> open(const char* const path);
 	static bool create_file(const char* const path);
 	bool read();
-	bool write();
+	bool write(const char* const path);
 	void close();
 };
 

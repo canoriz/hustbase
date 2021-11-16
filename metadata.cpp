@@ -33,7 +33,7 @@ ColumnRec::ColumnRec() {
 
 Result<TableMetaData, int> TableMetaData::open(const char* const path) {
 	TableMetaData metadata;
-	metadata.file = fopen(path, "a+b");
+	metadata.file = fopen(path, "rb");
 	if (metadata.file != NULL) {
 		return Result<TableMetaData, int>::Ok(metadata);
 	}
@@ -63,10 +63,13 @@ bool TableMetaData::read() {
 	while (1 == fread(&new_rec, sizeof(new_rec), 1, this->file)) {
 		this->columns.push_back(new_rec);
 	}
+	this->close();
 	return true;
 }
 
-bool TableMetaData::write() {
+bool TableMetaData::write(const char* const path) {
+	this->close();
+	this->file = fopen(path, "wb");
 	if (!this->file) {
 		// not open
 		return false;

@@ -41,7 +41,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	tmeta.table.attrcount = count;
 	strcpy(tmeta.table.tablename, name);
 	tmeta.table.size = aggregate_size;
-	if (!tmeta.write()) {
+	if (!tmeta.write(full_path)) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);
 	}
@@ -97,41 +97,44 @@ bool Table::destroy() {
 	return true;
 }
 
-Result<bool, RC> Table::remove_index_flag_on(char* const column)
+bool Table::remove_index_flag_on(char* const column)
 {
 	for(auto &c: this->meta.columns) {
 		const int SAME = 0;
 		if (strcmp(c.attrname, column) == SAME) {
 			if (c.ix_flag) {
 				c.ix_flag = false;
-				//TODO: this->file has closed
-				return this->meta.write();
+				return true;
 			}
 			else {
 				return false;
 			}
 		}
 	}
-	return Result<bool, RC>();
+	return false;
 }
 
-Result<bool, RC> Table::add_index_flag_on(char* const column)
+bool Table::add_index_flag_on(char* const column, char* const index)
 {
 	for (auto& c : this->meta.columns) {
 		const int SAME = 0;
 		if (strcmp(c.attrname, column) == SAME) {
 			if (!c.ix_flag) {
 				c.ix_flag = true;
-				//TODO: this->file has closed
-				return this->meta.write();
+				strcpy(c.indexname, index);
+				return true;
 			}
 			else {
 				return false;
 			}
 		}
 	}
-	return Result<bool, RC>();
-	return Result<bool, RC>();
+	return false;
+}
+
+bool Table::store_metadata_to(char* const path)
+{
+	return this->meta.write(path);
 }
 
 Result<ColumnRec*, RC> Table::get_column(char* const column)
