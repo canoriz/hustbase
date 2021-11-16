@@ -13,9 +13,8 @@
 
 
 class Table {
-private:
-	TableMetaData meta;
 public:
+	TableMetaData meta;
 	char name[21];
 	RM_FileHandle file;
 
@@ -27,6 +26,10 @@ public:
 public:
 	bool close();
 	bool destroy();
+	bool remove_index_flag_on(char* const column);
+	bool add_index_flag_on(char* const column, char* const index);
+	bool store_metadata_to(char* const path);
+	Result<ColumnRec*, RC> get_column(char* const column);
 };
 
 

@@ -6,7 +6,10 @@ RC Query(char * sql, SelResult * res) {
 	return FAIL;
 }
 
-RC Select(int nSelAttrs, RelAttr ** selAttrs, int nRelations, char ** relations, int nConditions, Condition * conditions, SelResult * res)
+RC Select(
+	int nSelAttrs, RelAttr** selAttrs,
+	int nRelations, char** relations,
+	int nConditions, Condition* conditions, SelResult* res)
 {
 	return FAIL;
 }

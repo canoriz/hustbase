@@ -8,6 +8,12 @@
 #include <vector>
 #include "result.h"
 
+typedef struct IndexRec {
+	char indexname[21];
+	char tablename[21];
+	char columnname[21];
+} IndexRec;
+
 typedef struct TableRec {
 	char tablename[21];
 	int  attrcount;
@@ -52,6 +58,26 @@ public:
 	}
 
 	static Result<TableMetaData, int> open(const char* const path);
+	static bool create_file(const char* const path);
+	bool read();
+	bool write(const char* const path);
+	void close();
+};
+
+class IndexMetaData {
+private:
+	FILE* file;
+
+public:
+	IndexRec index;
+
+public:
+	IndexMetaData() {
+		this->file = NULL;
+		this->index = IndexRec();
+	}
+
+	static Result<IndexMetaData, int> open(const char* const path);
 	static bool create_file(const char* const path);
 	bool read();
 	bool write();
