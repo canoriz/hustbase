@@ -8,6 +8,7 @@
 #include "result.h"
 #include "metadata.h"
 #include "table.h"
+#include "index.h"
 
 
 const int PATH_SIZE = 320;
@@ -19,6 +20,7 @@ private:
 	bool opened;
 
 	std::vector<Table> opened_tables;
+	std::vector<Index> opened_indices;
 
 private:
 	void prefix_root(char* dest, const char* const subdir);
@@ -31,8 +33,12 @@ public:
 	char* const name();
 	bool in_use();
 	bool close();
+	Result<bool, RC> remove_file(const char* const file_name);
 	Result<bool, RC> drop_table(const char* const table_name);
 	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
+	Result<bool, RC> add_index(char* const table_name, char* const column_name, char* const index_name);
+	Result<bool, RC> drop_index(char* const index_name);
+	Result<bool, RC> open_table(char* const table_name);
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
@@ -90,6 +96,26 @@ bool DataBase::close() {
 	return true;
 }
 
+Result<bool, RC> DataBase::remove_file(const char* const file_name) {
+	// remove file_name and .file_name
+	// remove tables and indices
+	char full_path[PATH_SIZE] = "";
+	this->prefix_root(full_path, file_name);
+	const int OK = 0;
+
+	if (remove(full_path) != OK) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	char meta_name[PATH_SIZE] = ".";
+	strcat(meta_name, file_name);
+	this->prefix_root(full_path, meta_name);
+	if (remove(full_path) != OK) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
 Result<bool, RC> DataBase::drop_table(const char* const table_name) {
 	// close if table is opened
 	for (auto it = this->opened_tables.begin(); it != this->opened_tables.end(); ++it) {
@@ -100,23 +126,8 @@ Result<bool, RC> DataBase::drop_table(const char* const table_name) {
 			this->opened_tables.erase(it);
 		}
 	}
-
 	// table closed
-	char full_path[PATH_SIZE] = "";
-	this->prefix_root(full_path, table_name);
-	const int OK = 0;
-
-	if (remove(full_path) != OK) {
-		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
-	}
-
-	char meta_name[PATH_SIZE] = ".";
-	strcat(meta_name, table_name);
-	this->prefix_root(full_path, meta_name);
-	if (remove(full_path) != OK) {
-		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
-	}
-	return Result<bool, RC>::Ok(true);
+	return this->remove_file(table_name);
 }
 
 Result<bool, RC> DataBase::add_table(char* const table_name, int count, AttrInfo* attrs)
@@ -126,6 +137,24 @@ Result<bool, RC> DataBase::add_table(char* const table_name, int count, AttrInfo
 		return Result<bool, RC>::Ok(true);
 	}
 	return Result<bool, RC>::Err(res.err);
+}
+
+Result<bool, RC> DataBase::add_index(
+		char* const table_name,
+		char* const column_name,
+		char* const index_name) {
+	//TODO
+	return Result<bool, RC>::Err(FAIL);
+}
+
+Result<bool, RC> DataBase::drop_index(char* const index_name) {
+	//TODO
+	return Result<bool, RC>::Err(FAIL);
+}
+
+Result<bool, RC> DataBase::open_table(char* const table_name) {
+	// TODO
+	return Result<bool, RC>::Err(FAIL);
 }
 
 DataBase working_db;

@@ -170,6 +170,7 @@
   <ItemGroup>
     <ClInclude Include="DBTest.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="index.h" />
     <ClInclude Include="IX_Manager.h" />
     <ClInclude Include="metadata.h" />
     <ClInclude Include="parse.h" />

@@ -25,8 +25,6 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 
 	// store metadata
 	TableMetaData tmeta = res.result;
-	tmeta.table.attrcount = count;
-	strcpy(tmeta.table.tablename, name);
 	int aggregate_size = 0;
 	for (auto i = 0; i < count; i++) {
 		AttrInfo tmp_attr = attrs[i];
@@ -39,6 +37,9 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		);
 		aggregate_size += tmp_attr.attrLength;
 	}
+
+	tmeta.table.attrcount = count;
+	strcpy(tmeta.table.tablename, name);
 	tmeta.table.size = aggregate_size;
 	if (!tmeta.write()) {
 		// write to file failed
