@@ -36,6 +36,7 @@ public:
 	bool in_use();
 	bool close();
 	bool update_table_metadata();
+	bool update_table_metadata_legacy();
 	Result<bool, RC> remove_file(const char* const file_name);
 	Result<bool, RC> drop_table(char* const table_name);
 	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
@@ -112,6 +113,27 @@ bool DataBase::update_table_metadata()
 			t.dirty = false;
 		}
 	}
+	this->update_table_metadata_legacy();
+	return true;
+}
+
+bool DataBase::update_table_metadata_legacy() {
+	// legacy mode
+	char full_path[PATH_SIZE] = "";
+	this->prefix_root(full_path, "SYSTABLE");
+	FILE* stbl = fopen(full_path, "wb");
+	this->prefix_root(full_path, "SYSCOLUMN");
+	FILE* scol = fopen(full_path, "wb");
+	for (auto& t : this->opened_tables) {
+		fwrite(t.name, sizeof(t.name), 1, stbl);
+		int count = t.meta.columns.size();
+		fwrite(&count, sizeof(int), 1, stbl);
+		for (auto& c : t.meta.columns) {
+			fwrite(&c, sizeof(c), 1, scol);
+		}
+	}
+	fclose(stbl);
+	fclose(scol);
 	return true;
 }
 
