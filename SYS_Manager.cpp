@@ -359,6 +359,7 @@ RC execute(char * sql) {
 		createIndex* create_index = &(processing_sql->sstr.crei);
 		dropIndex* drop_index = &(processing_sql->sstr.dri);
 		inserts* insert = &(processing_sql->sstr.ins);
+		selects* select = &(processing_sql->sstr.sel);
 		switch (processing_sql->flag) {
 		case 1:
 			//判断SQL语句为select语句
