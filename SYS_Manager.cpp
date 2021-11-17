@@ -42,6 +42,7 @@ public:
 	Result<bool, RC> add_table(char* const table_name, int count, AttrInfo* attrs);
 	Result<bool, RC> add_index(char* const table_name, char* const column_name, char* const index_name);
 	Result<bool, RC> drop_index(char* const index_name);
+	Result<bool, RC> insert(char* const table, const int n, Value* const vals);
 	Result<Table, RC> open_table(char* const table_name);
 	Result<Index, RC> open_index(char* const index_name);
 
@@ -281,6 +282,35 @@ Result<bool, RC> DataBase::drop_index(char* const index_name) {
 	return Result<bool, RC>::Err(INDEX_NOT_EXIST);
 }
 
+Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const vals)
+{
+	auto opent = this->open_table(table);
+	if (!opent.ok) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+	auto& t = opent.result;
+
+	char* buffer = (char*)malloc(21 * n);
+	char* here = buffer;
+	int processing_column_i = t.meta.columns.size() - 1;
+	for (int i = 0; i < t.meta.columns.size(); i++, processing_column_i--) {
+		ColumnRec* c_rec = &t.meta.columns[processing_column_i];
+		int x = *(int*)vals[i].data;
+		char c = *(char*)vals[i].data;
+		memcpy(buffer + c_rec->attroffset, vals[i].data, c_rec->attrlength);
+	}
+
+	RID rid;
+	RC insert_res = InsertRec(&t.file, buffer, &rid);
+	free(buffer);
+	buffer = NULL;
+
+	if (SUCCESS != insert_res) {
+		return Result<bool, RC>::Err(insert_res);
+	}
+	return Result<bool, RC>();
+}
+
 Result<Table, RC> DataBase::open_table(char* const table_name) {
 	for (auto const& t : this->opened_tables) {
 		const int SAME = 0;
@@ -328,6 +358,7 @@ RC execute(char * sql) {
 		dropTable* drop_table = &(processing_sql->sstr.drt);
 		createIndex* create_index = &(processing_sql->sstr.crei);
 		dropIndex* drop_index = &(processing_sql->sstr.dri);
+		inserts* insert = &(processing_sql->sstr.ins);
 		switch (processing_sql->flag) {
 		case 1:
 			//判断SQL语句为select语句
@@ -335,6 +366,7 @@ RC execute(char * sql) {
 
 		case 2:
 			//判断SQL语句为insert语句
+			return Insert(insert->relName, insert->nValues, insert->values);
 			break;
 
 		case 3:
@@ -472,7 +504,11 @@ RC DropIndex(char *indexName) {
 }
 
 RC Insert(char *relName, int nValues, Value * values) {
-	return FAIL;
+	auto res = working_db.insert(relName, nValues, values);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 RC Delete(char *relName, int nConditions, Condition *conditions) {
 	return FAIL;
