@@ -28,6 +28,10 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	int aggregate_size = 0;
 	for (auto i = 0; i < count; i++) {
 		AttrInfo tmp_attr = attrs[i];
+		int real_length = tmp_attr.attrLength;
+		if (tmp_attr.attrType == chars) {
+			real_length = tmp_attr.attrLength + 1;
+		}
 		tmeta.columns.push_back(
 			ColumnRec(
 				tmp_attr.attrName, tmp_attr.attrType,
@@ -35,7 +39,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 				false, ""
 			)
 		);
-		aggregate_size += tmp_attr.attrLength;
+		aggregate_size += real_length;
 	}
 
 	tmeta.table.attrcount = count;

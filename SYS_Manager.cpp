@@ -284,6 +284,7 @@ Result<bool, RC> DataBase::drop_index(char* const index_name) {
 
 Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const vals)
 {
+	// reverse order table(a,b,c,d), values(d,c,b,a)
 	auto opent = this->open_table(table);
 	if (!opent.ok) {
 		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
