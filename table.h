@@ -30,6 +30,7 @@ public:
 	bool remove_index_flag_on(char* const column);
 	bool add_index_flag_on(char* const column, char* const index);
 	bool store_metadata_to(char* const path);
+	Result<RID, RC> insert_record(char* const data);
 	Result<ColumnRec*, RC> get_column(char* const column);
 };
 

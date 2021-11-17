@@ -143,6 +143,16 @@ bool Table::store_metadata_to(char* const path)
 	return this->meta.write(path);
 }
 
+Result<RID, RC> Table::insert_record(char* const data)
+{
+	RID rid;
+	RC insert = InsertRec(&this->file, data, &rid);
+	if (insert != SUCCESS) {
+		return Result<RID, RC>::Ok(rid);
+	}
+	return Result<RID, RC>::Err(insert);
+}
+
 Result<ColumnRec*, RC> Table::get_column(char* const column)
 {
 	for (auto& c : this->meta.columns) {

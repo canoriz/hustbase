@@ -302,14 +302,13 @@ Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const v
 	}
 
 	RID rid;
-	RC insert_res = InsertRec(&t.file, buffer, &rid);
-	free(buffer);
-	buffer = NULL;
-
-	if (SUCCESS != insert_res) {
-		return Result<bool, RC>::Err(insert_res);
+	auto ins_res = t.insert_record(buffer);
+	if (!ins_res.ok) {
+		free(buffer);
+		return ins_res.err;
 	}
-	return Result<bool, RC>();
+	free(buffer);
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<Table, RC> DataBase::open_table(char* const table_name) {
