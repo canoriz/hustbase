@@ -24,6 +24,7 @@ ColumnRec::ColumnRec(
 }
 
 ColumnRec::ColumnRec() {
+	strcpy(this->tablename, "");
 	strcpy(this->attrname, "");
 	this->attrtype = 0;
 	this->attrlength = 0;
