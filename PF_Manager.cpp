@@ -65,7 +65,8 @@ const RC OpenFile(char *fileName,int * FileID)
 	if((fd=_open(fileName,O_RDWR|_O_BINARY))<0)
 		return PF_FILEERR;
 	pfilehandle->bOpen=true;
-	pfilehandle->fileName=fileName;
+	pfilehandle->fileName = (char*)malloc(strlen(fileName) + 1);
+	strcpy(pfilehandle->fileName, fileName);
 	pfilehandle->fileDesc=fd;
 	if((tmp=AllocateBlock(&pfilehandle->pHdrFrame))!=SUCCESS){
 		_close(fd);
@@ -75,7 +76,8 @@ const RC OpenFile(char *fileName,int * FileID)
 	pfilehandle->pHdrFrame->pinCount=1;
 	pfilehandle->pHdrFrame->accTime=clock();
 	pfilehandle->pHdrFrame->fileDesc=fd;
-	pfilehandle->pHdrFrame->fileName=fileName;
+	pfilehandle->pHdrFrame->fileName = (char*)malloc(strlen(fileName) + 1);
+	strcpy(pfilehandle->pHdrFrame->fileName, fileName);
 	if(_lseek(fd,0,SEEK_SET)==-1){
 		DisposeBlock(pfilehandle->pHdrFrame);
 		_close(fd);
@@ -108,6 +110,8 @@ const RC CloseFile(int FileID)
 	if(_close(fileHandle->fileDesc)<0)
 		return PF_FILEERR;
     open_list[FileID]=NULL;
+	free(fileHandle->pHdrFrame->fileName);
+	free(fileHandle->fileName);
     free(fileHandle);
 	return SUCCESS;
 }
