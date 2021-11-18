@@ -8,15 +8,21 @@
 #include <vector>
 #include "result.h"
 
+typedef struct IndexRec {
+	char indexname[21];
+	char tablename[21];
+	char columnname[21];
+} IndexRec;
+
 typedef struct TableRec {
 	char tablename[21];
 	int  attrcount;
 	int  size;
 } TableRec;
 
-
+#pragma pack(1)
 typedef struct ColumnRec {
-	//char tablename[21];
+	char tablename[21];
 	char attrname[21];
 	int  attrtype;
 	int  attrlength;
@@ -25,6 +31,7 @@ typedef struct ColumnRec {
 	char indexname[21];
 
 	ColumnRec(
+		const char* const name,
 		const char* const _attrname,
 		int _attrtype,
 		int _attrlength,
@@ -35,6 +42,7 @@ typedef struct ColumnRec {
 	ColumnRec();
 
 } ColumnRec;
+#pragma pack()
 
 
 class TableMetaData {
@@ -52,6 +60,26 @@ public:
 	}
 
 	static Result<TableMetaData, int> open(const char* const path);
+	static bool create_file(const char* const path);
+	bool read();
+	bool write(const char* const path);
+	void close();
+};
+
+class IndexMetaData {
+private:
+	FILE* file;
+
+public:
+	IndexRec index;
+
+public:
+	IndexMetaData() {
+		this->file = NULL;
+		this->index = IndexRec();
+	}
+
+	static Result<IndexMetaData, int> open(const char* const path);
 	static bool create_file(const char* const path);
 	bool read();
 	bool write();

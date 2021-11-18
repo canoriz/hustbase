@@ -25,22 +25,28 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 
 	// store metadata
 	TableMetaData tmeta = res.result;
-	tmeta.table.attrcount = count;
-	strcpy(tmeta.table.tablename, name);
 	int aggregate_size = 0;
 	for (auto i = 0; i < count; i++) {
 		AttrInfo tmp_attr = attrs[i];
+		int real_length = tmp_attr.attrLength;
+		if (tmp_attr.attrType == chars) {
+			real_length = tmp_attr.attrLength + 1;
+		}
 		tmeta.columns.push_back(
 			ColumnRec(
+				name,
 				tmp_attr.attrName, tmp_attr.attrType,
 				tmp_attr.attrLength, aggregate_size,
 				false, ""
 			)
 		);
-		aggregate_size += tmp_attr.attrLength;
+		aggregate_size += real_length;
 	}
+
+	tmeta.table.attrcount = count;
+	strcpy(tmeta.table.tablename, name);
 	tmeta.table.size = aggregate_size;
-	if (!tmeta.write()) {
+	if (!tmeta.write(full_path)) {
 		// write to file failed
 		return Result<bool, RC>::Err(FAIL);
 	}
@@ -63,9 +69,13 @@ Result<Table, RC> Table::open(char* path, char* name) {
 	strcpy(full_path, path);
 	strcat(full_path, "\\.");
 	strcat(full_path, name);
-	Result<TableMetaData, int> tmeta = TableMetaData::open(full_path);
-	if (!tmeta.ok) {
+	Result<TableMetaData, int> open = TableMetaData::open(full_path);
+	if (!open.ok) {
 		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+	auto& tmeta = open.result;
+	if (!tmeta.read()) {
+		return Result<Table, RC>::Err(FAIL);
 	}
 
 	// table path
@@ -73,7 +83,7 @@ Result<Table, RC> Table::open(char* path, char* name) {
 	strcat(full_path, "\\");
 	strcat(full_path, name);
 	Table t;
-	t.meta = tmeta.result;
+	t.meta = tmeta;
 	RC res = RM_OpenFile(full_path, &t.file);
 	if (res == SUCCESS) {
 		strcpy(t.name, name);
@@ -90,4 +100,67 @@ bool Table::close() {
 bool Table::destroy() {
 	//TODO
 	return true;
+}
+
+bool Table::remove_index_flag_on(char* const column)
+{
+	for(auto &c: this->meta.columns) {
+		const int SAME = 0;
+		if (strcmp(c.attrname, column) == SAME) {
+			if (c.ix_flag) {
+				c.ix_flag = false;
+				this->dirty = true;
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+	}
+	return false;
+}
+
+bool Table::add_index_flag_on(char* const column, char* const index)
+{
+	for (auto& c : this->meta.columns) {
+		const int SAME = 0;
+		if (strcmp(c.attrname, column) == SAME) {
+			if (!c.ix_flag) {
+				c.ix_flag = true;
+				this->dirty = true;
+				strcpy(c.indexname, index);
+				return true;
+			}
+			else {
+				return false;
+			}
+		}
+	}
+	return false;
+}
+
+bool Table::store_metadata_to(char* const path)
+{
+	return this->meta.write(path);
+}
+
+Result<RID, RC> Table::insert_record(char* const data)
+{
+	RID rid;
+	RC insert = InsertRec(&this->file, data, &rid);
+	if (insert != SUCCESS) {
+		return Result<RID, RC>::Err(insert);
+	}
+	return Result<RID, RC>::Ok(rid);
+}
+
+Result<ColumnRec*, RC> Table::get_column(char* const column)
+{
+	for (auto& c : this->meta.columns) {
+		const int SAME = 0;
+		if (strcmp(c.attrname, column) == SAME) {
+			return Result<ColumnRec*, RC>::Ok(&c);
+		}
+	}
+	return Result<ColumnRec*, RC>::Err(FAIL);
 }
