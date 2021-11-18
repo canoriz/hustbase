@@ -147,11 +147,13 @@ RC execute(char * sql) {
 			break;
 
 		case 2:
+			return SUCCESS;
 			//判断SQL语句为insert语句
 			break;
 
 		case 3:
 			//判断SQL语句为update语句
+			return SUCCESS;
 			break;
 
 		case 4:

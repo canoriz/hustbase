@@ -219,7 +219,7 @@ RC GetNextRec(RM_FileScan *rmFileScan, RM_Record *rec)
 	char* pData = nullptr;
 	RC temp;
 	while ((temp = nextRec(rmFileScan)) == SUCCESS) {	// 找到了一条记录
-
+		
 		GetThisPage(rmFileScan->pRMFileHandle->fileDesc, rmFileScan->pn, &rmFileScan->PageHandle);
 		pData = rmFileScan->PageHandle.pFrame->page.pData + firstRecordOffset + rmFileScan->sn * recordSize;
 
@@ -468,8 +468,6 @@ RC RM_CreateFile(char *fileName, int recordSize)
 		return temp;
 
 	temp = MarkDirty(pageHandle);
-	if (temp != SUCCESS)
-		return temp;
 	free(pageHandle);
 	return SUCCESS;
 }
@@ -480,7 +478,6 @@ RC RM_CreateFile(char *fileName, int recordSize)
 */
 RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 {
-	return FAIL;
 	int sizeRM = sizeof(RM_FileSubHeader);
 	PF_FileHandle* pfHandle = (PF_FileHandle*)malloc(sizeof(PF_FileHandle));
 	int fileID;
@@ -498,8 +495,9 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 		return temp;
 	}
 
+	fileHandle->fileName = (char*)malloc(strlen(fileName) + 1);
+	strcpy(fileHandle->fileName, fileName);
 	fileHandle->bOpen = true;
-	fileHandle->fileName = fileName;
 	fileHandle->fileDesc = fileID;
 	fileHandle->pHdrFrame = pageHandle->pFrame;
 	fileHandle->pHdrPage = &(pageHandle->pFrame->page);
@@ -511,10 +509,12 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 	return SUCCESS;
 }
 
-RC RM_CloseFile(RM_FileHandle *fileHandle)
-{
+RC RM_CloseFile(RM_FileHandle *fileHandle){
+	if (fileHandle->bOpen == false)
+		return RM_FHCLOSED;
 	fileHandle->pHdrFrame->pinCount--;
 	RC temp = CloseFile(fileHandle->fileDesc);
+	free(fileHandle->fileName);
 	if (temp != SUCCESS)
 		return temp;
 	fileHandle->bOpen = false;
