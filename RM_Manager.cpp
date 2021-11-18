@@ -274,8 +274,8 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec){
 	rec->rid = *rid;
 	rec->bValid = true;
 	rec->rid.bValid = true;
-	int offset = fileHandle->fileSubHeader->firstRecordOffset;
-	int size = fileHandle->fileSubHeader->recordSize;
+	int offset = ((RM_FileSubHeader*)pageHandle.pFrame->page.pData)->firstRecordOffset;
+	int size = ((RM_FileSubHeader*)pageHandle.pFrame->page.pData)->recordSize;
 	int pos = offset + size * slot;
 	rec->pData = pageHandle.pFrame->page.pData + pos;
 	UnpinPage(&pageHandle);
@@ -424,8 +424,8 @@ RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
 	if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0 || (pageHandle.pFrame->page.pData[slot / 8] & 1 << (slot % 8)) == 0)
 		return RM_INVALIDRID;
 	
-	int offset = fileHandle->fileSubHeader->firstRecordOffset;
-	int size = fileHandle->fileSubHeader->recordSize;
+	int offset = ((RM_FileSubHeader*)pageHandle.pFrame->page.pData)->firstRecordOffset;
+	int size = ((RM_FileSubHeader*)pageHandle.pFrame->page.pData)->recordSize;
 	int pos = offset + size * slot;
 
 	memcpy(pageHandle.pFrame->page.pData + pos, rec->pData, size);
@@ -437,7 +437,6 @@ RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
 
 RC RM_CreateFile(char *fileName, int recordSize)
 {
-
 	int fileID;
 	int sizeRM = sizeof(RM_FileSubHeader);
 
@@ -486,12 +485,13 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 		free(pfHandle);
 		return temp;
 	}
-	PF_PageHandle *pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
-	pageHandle->bOpen = false;
-	GetThisPage(fileID, 1, pageHandle);
+	//PF_PageHandle *pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
+	PF_PageHandle pageHandle;
+	pageHandle.bOpen = false;
+	GetThisPage(fileID, 1, &pageHandle);
 	if (temp != SUCCESS) {
 		free(pfHandle);
-		free(pageHandle);
+		//free(pageHandle);
 		return temp;
 	}
 
@@ -499,13 +499,13 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 	strcpy(fileHandle->fileName, fileName);
 	fileHandle->bOpen = true;
 	fileHandle->fileDesc = fileID;
-	fileHandle->pHdrFrame = pageHandle->pFrame;
-	fileHandle->pHdrPage = &(pageHandle->pFrame->page);
-	fileHandle->pBitmap = pageHandle->pFrame->page.pData + sizeRM;
-	fileHandle->fileSubHeader = (RM_FileSubHeader*)pageHandle->pFrame->page.pData;
+	fileHandle->pHdrFrame = pageHandle.pFrame;
+	fileHandle->pHdrPage = &(pageHandle.pFrame->page);
+	fileHandle->pBitmap = pageHandle.pFrame->page.pData + sizeRM;
+	fileHandle->fileSubHeader = (RM_FileSubHeader*)pageHandle.pFrame->page.pData;
 
 	free(pfHandle);
-	free(pageHandle);
+	//free(pageHandle);
 	return SUCCESS;
 }
 
