@@ -122,19 +122,62 @@ bool DataBase::update_table_metadata_legacy() {
 	// legacy mode
 	char full_path[PATH_SIZE] = "";
 	this->prefix_root(full_path, "SYSTABLE");
-	FILE* stbl = fopen(full_path, "wb");
-	this->prefix_root(full_path, "SYSCOLUMN");
-	FILE* scol = fopen(full_path, "wb");
+	this->drop_table("SYSTABLE");
+	this->drop_table("SYSCOLUMN");
+
+	char s01[] = "tablename";
+	char s02[] = "attrcount";
+	char s11[] = "tablename";
+	char s12[] = "attrname";
+	char s13[] = "attrtype";
+	char s14[] = "attrlength";
+	char s15[] = "attroffset";
+	char s16[] = "ix_flag";
+	char s17[] = "indexname";
+	AttrInfo tab[2] = {
+		{s01, chars, 20},
+		{s02, ints, 4}
+	};
+	AttrInfo col[7] = {
+		{s11, chars, 20},
+		{s12, chars, 20},
+		{s13, ints, 4},
+		{s14, ints, 4},
+		{s15, ints, 4},
+		{s16, ints, 1},
+		{s17, chars, 20}
+	};
+	Table::create(this->sysroot, "SYSTABLE", 2, tab);
+	Table::create(this->sysroot, "SYSCOLUMN", 7, col);
+	auto stbl_res = this->open_table("SYSTABLE");
+	auto scol_res = this->open_table("SYSCOLUMN");
+	if (!stbl_res.ok || !scol_res.ok) {
+		return false;
+	}
+	auto& stbl = stbl_res.result;
+	auto& scol = scol_res.result;
+
 	for (auto& t : this->opened_tables) {
-		fwrite(t.name, sizeof(t.name), 1, stbl);
-		int count = t.meta.columns.size();
-		fwrite(&count, sizeof(int), 1, stbl);
-		for (auto& c : t.meta.columns) {
-			fwrite(&c, sizeof(c), 1, scol);
+		// make [ tablename | attrcount ] char*
+		const int SAME = 0;
+		if (
+					strcmp(t.name, "SYSTABLE") != SAME &&
+					strcmp(t.name, "SYSCOLUMN") != SAME
+		) {
+				int count = t.meta.columns.size();
+				char buf[21 + 4];
+				strcpy(buf, t.name);
+				memcpy(buf + 21, &count, sizeof(int));
+				stbl.insert_record(buf);
+				for (auto& c : t.meta.columns) {
+					/*
+					* insert
+					* [ tablename | attrname | attrtype | attrlength | attroffset | ix? | ix_name ]
+					*/
+					scol.insert_record((char*)&c);
+				}
 		}
 	}
-	fclose(stbl);
-	fclose(scol);
 	return true;
 }
 
@@ -403,6 +446,7 @@ RC execute(char * sql) {
 
 		case 10:
 			//判断为exit语句，可以由此进行退出操作
+			return CloseDB();
 			break;
 		}
 		return rc;

@@ -6,6 +6,7 @@
 #include "metadata.h"
 
 ColumnRec::ColumnRec(
+	const char* const _name,
 	const char* const _attrname,
 	int _attrtype,
 	int _attrlength,
@@ -13,6 +14,7 @@ ColumnRec::ColumnRec(
 	bool _ix_flag,
 	const char* const _index_name
 ) {
+	strcpy(this->tablename, _name);
 	strcpy(this->attrname, _attrname);
 	this->attrtype = _attrtype;
 	this->attrlength = _attrlength;
