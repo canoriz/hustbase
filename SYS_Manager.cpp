@@ -242,6 +242,9 @@ Result<bool, RC> DataBase::drop_table(char* const table_name) {
 		}
 	}
 	this->close_table(table_name);
+	if (strcmp(table_name, "SYSTABLE") != 0 && strcmp(table_name, "SYSCOLUMN") != 0) {
+		this->update_table_metadata();
+	}
 	return this->remove_file(table_name);
 }
 
@@ -251,6 +254,7 @@ Result<bool, RC> DataBase::add_table(char* const table_name, int count, AttrInfo
 	if (res.ok) {
 		return Result<bool, RC>::Ok(true);
 	}
+	this->update_table_metadata();
 	return Result<bool, RC>::Err(res.err);
 }
 
