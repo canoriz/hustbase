@@ -34,6 +34,7 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		}
 		tmeta.columns.push_back(
 			ColumnRec(
+				name,
 				tmp_attr.attrName, tmp_attr.attrType,
 				tmp_attr.attrLength, aggregate_size,
 				false, ""
@@ -148,9 +149,9 @@ Result<RID, RC> Table::insert_record(char* const data)
 	RID rid;
 	RC insert = InsertRec(&this->file, data, &rid);
 	if (insert != SUCCESS) {
-		return Result<RID, RC>::Ok(rid);
+		return Result<RID, RC>::Err(insert);
 	}
-	return Result<RID, RC>::Err(insert);
+	return Result<RID, RC>::Ok(rid);
 }
 
 Result<ColumnRec*, RC> Table::get_column(char* const column)

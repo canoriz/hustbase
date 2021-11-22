@@ -1,4 +1,5 @@
-﻿#include "RM_Manager.h"
+﻿#define _CRT_SECURE_NO_WARNINGS
+#include "RM_Manager.h"
 #include "str.h"
 #include <math.h>
 
@@ -498,7 +499,9 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 	}
 
 	fileHandle->bOpen = true;
-	fileHandle->fileName = fileName;
+	fileHandle->fileName = (char*)malloc(sizeof(char)*320);
+	strcpy(fileHandle->fileName, fileName);
+	//fileHandle->fileName = fileName;
 	fileHandle->fileDesc = fileID;
 	fileHandle->pHdrFrame = pageHandle->pFrame;
 	fileHandle->pHdrPage = &(pageHandle->pFrame->page);
@@ -512,6 +515,8 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 
 RC RM_CloseFile(RM_FileHandle *fileHandle)
 {
+	if (!fileHandle->bOpen)
+		return RM_FSCLOSED;
 	fileHandle->pHdrFrame->pinCount--;
 	RC temp = CloseFile(fileHandle->fileDesc);
 	if (temp != SUCCESS)
