@@ -55,7 +55,7 @@ bool DataBase::create(char* dbpath) {
 	return (
 		Table::create(dbpath, "SYSTABLE", 0, NULL).ok &&
 		Table::create(dbpath, "SYSCOLUMN", 0, NULL).ok
-	);
+		);
 }
 
 char* const DataBase::name() {
@@ -73,7 +73,7 @@ bool DataBase::in_use() {
 	return this->opened;
 }
 
-Result<DataBase, RC> DataBase::open (const char* const db_root) {
+Result<DataBase, RC> DataBase::open(const char* const db_root) {
 	DataBase db(db_root);
 	char full_path[PATH_SIZE];
 	db.prefix_root(full_path, "SYSTABLE");
@@ -92,7 +92,7 @@ bool DataBase::close() {
 		this->opened = false;
 
 		bool all_table_closed = true;
-		for (auto &t : this->opened_tables) {
+		for (auto& t : this->opened_tables) {
 			all_table_closed &= t.close();
 		}
 		return all_table_closed;
@@ -161,21 +161,21 @@ bool DataBase::update_table_metadata_legacy() {
 		// make [ tablename | attrcount ] char*
 		const int SAME = 0;
 		if (
-					strcmp(t.name, "SYSTABLE") != SAME &&
-					strcmp(t.name, "SYSCOLUMN") != SAME
-		) {
-				int count = t.meta.columns.size();
-				char buf[21 + 4];
-				strcpy(buf, t.name);
-				memcpy(buf + 21, &count, sizeof(int));
-				stbl.insert_record(buf);
-				for (auto& c : t.meta.columns) {
-					/*
-					* insert
-					* [ tablename | attrname | attrtype | attrlength | attroffset | ix? | ix_name ]
-					*/
-					scol.insert_record((char*)&c);
-				}
+			strcmp(t.name, "SYSTABLE") != SAME &&
+			strcmp(t.name, "SYSCOLUMN") != SAME
+			) {
+			int count = t.meta.columns.size();
+			char buf[21 + 4];
+			strcpy(buf, t.name);
+			memcpy(buf + 21, &count, sizeof(int));
+			stbl.insert_record(buf);
+			for (auto& c : t.meta.columns) {
+				/*
+				* insert
+				* [ tablename | attrname | attrtype | attrlength | attroffset | ix? | ix_name ]
+				*/
+				scol.insert_record((char*)&c);
+			}
 		}
 	}
 	return true;
@@ -240,6 +240,9 @@ Result<bool, RC> DataBase::drop_table(char* const table_name) {
 				return Result<bool, RC>::Err(res.err);
 			}
 		}
+	}
+	if (!this->update_table_metadata()) {
+		return Result<bool, RC>::Err(FAIL);
 	}
 	this->close_table(table_name);
 	if (strcmp(table_name, "SYSTABLE") != 0 && strcmp(table_name, "SYSCOLUMN") != 0) {
@@ -393,9 +396,9 @@ Result<Index, RC> DataBase::open_index(char* const index_name) {
 DataBase working_db;
 
 
-RC execute(char * sql) {
+RC execute(char* sql) {
 
-	sqlstr *processing_sql = NULL;
+	sqlstr* processing_sql = NULL;
 	RC rc;
 	processing_sql = get_sqlstr();
 	rc = parse(sql, processing_sql);//只有两种返回结果SUCCESS和SQL_SYNTAX
@@ -462,14 +465,14 @@ RC execute(char * sql) {
 	}
 }
 
-RC CreateDB(char *dbpath, char *dbname) {
+RC CreateDB(char* dbpath, char* dbname) {
 	if (DataBase::create(dbpath)) {
 		return SUCCESS;
 	}
 	return FAIL;
 }
 
-RC DropDB(char *dbname) {
+RC DropDB(char* dbname) {
 	// dbname: english characters only
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, dbname);
@@ -498,7 +501,7 @@ RC DropDB(char *dbname) {
 	return FAIL;
 }
 
-RC OpenDB(char *dbname) {
+RC OpenDB(char* dbname) {
 	Result<DataBase, RC> res = DataBase::open(dbname);
 	if (res.ok) {
 		working_db.close();
@@ -508,14 +511,14 @@ RC OpenDB(char *dbname) {
 	return FAIL;
 }
 
-RC CloseDB(){
+RC CloseDB() {
 	if (working_db.close()) {
 		return SUCCESS;
 	}
 	return FAIL;
 }
 
-RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
+RC CreateTable(char* relName, int attrCount, AttrInfo* attributes) {
 	auto res = working_db.add_table(relName, attrCount, attributes);
 	if (res.ok) {
 		return SUCCESS;
@@ -523,7 +526,7 @@ RC CreateTable(char *relName, int attrCount, AttrInfo *attributes) {
 	return res.err;
 }
 
-RC DropTable(char *relName) {
+RC DropTable(char* relName) {
 	// delete table, .table
 	auto res = working_db.drop_table(relName);
 	if (res.ok) {
@@ -532,11 +535,11 @@ RC DropTable(char *relName) {
 	return res.err;
 }
 
-RC IndexExist(char *relName, char *attrName, RM_Record *rec) {
+RC IndexExist(char* relName, char* attrName, RM_Record* rec) {
 	return FAIL;
 }
 
-RC CreateIndex(char *indexName, char *relName, char *attrName) {
+RC CreateIndex(char* indexName, char* relName, char* attrName) {
 	auto res = working_db.add_index(relName, attrName, indexName);
 	if (res.ok) {
 		return SUCCESS;
@@ -544,7 +547,7 @@ RC CreateIndex(char *indexName, char *relName, char *attrName) {
 	return res.err;
 }
 
-RC DropIndex(char *indexName) {
+RC DropIndex(char* indexName) {
 	auto res = working_db.drop_index(indexName);
 	if (res.ok) {
 		return SUCCESS;
@@ -552,16 +555,16 @@ RC DropIndex(char *indexName) {
 	return res.err;
 }
 
-RC Insert(char *relName, int nValues, Value * values) {
+RC Insert(char* relName, int nValues, Value* values) {
 	auto res = working_db.insert(relName, nValues, values);
 	if (res.ok) {
 		return SUCCESS;
 	}
 	return res.err;
 }
-RC Delete(char *relName, int nConditions, Condition *conditions) {
+RC Delete(char* relName, int nConditions, Condition* conditions) {
 	return FAIL;
 }
-RC Update(char *relName, char *attrName, Value *value, int nConditions, Condition *conditions) {
+RC Update(char* relName, char* attrName, Value* value, int nConditions, Condition* conditions) {
 	return FAIL;
 }

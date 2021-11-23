@@ -1,5 +1,4 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
-#include "RM_Manager.h"
+﻿#include "RM_Manager.h"
 #include "str.h"
 #include <math.h>
 
@@ -65,7 +64,7 @@ RC OpenScan(RM_FileScan *rmFileScan, RM_FileHandle *fileHandle, int conNum, Con 
 	rmFileScan->PageHandle.bOpen = false;
 	rmFileScan->PageHandle.pFrame = nullptr;
 	rmFileScan->pn = 2;
-	rmFileScan->sn = 0;
+	rmFileScan->sn = -1;
 	return SUCCESS;
 }
 
@@ -220,7 +219,7 @@ RC GetNextRec(RM_FileScan *rmFileScan, RM_Record *rec)
 	char* pData = nullptr;
 	RC temp;
 	while ((temp = nextRec(rmFileScan)) == SUCCESS) {	// 找到了一条记录
-
+		
 		GetThisPage(rmFileScan->pRMFileHandle->fileDesc, rmFileScan->pn, &rmFileScan->PageHandle);
 		pData = rmFileScan->PageHandle.pFrame->page.pData + firstRecordOffset + rmFileScan->sn * recordSize;
 
@@ -275,8 +274,8 @@ RC GetRec(RM_FileHandle *fileHandle, RID *rid, RM_Record *rec){
 	rec->rid = *rid;
 	rec->bValid = true;
 	rec->rid.bValid = true;
-	int offset = fileHandle->fileSubHeader->firstRecordOffset;
-	int size = fileHandle->fileSubHeader->recordSize;
+	int offset = ((RM_FileSubHeader*)fileHandle->pHdrFrame->page.pData)->firstRecordOffset;
+	int size = ((RM_FileSubHeader*)fileHandle->pHdrFrame->page.pData)->recordSize;
 	int pos = offset + size * slot;
 	rec->pData = pageHandle.pFrame->page.pData + pos;
 	UnpinPage(&pageHandle);
@@ -425,8 +424,8 @@ RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
 	if ((pFileHandle->pBitmap[page / 8] & 1 << (page % 8)) == 0 || (pageHandle.pFrame->page.pData[slot / 8] & 1 << (slot % 8)) == 0)
 		return RM_INVALIDRID;
 	
-	int offset = fileHandle->fileSubHeader->firstRecordOffset;
-	int size = fileHandle->fileSubHeader->recordSize;
+	int offset = ((RM_FileSubHeader*)fileHandle->pHdrFrame->page.pData)->firstRecordOffset;
+	int size = ((RM_FileSubHeader*)fileHandle->pHdrFrame->page.pData)->recordSize;
 	int pos = offset + size * slot;
 
 	memcpy(pageHandle.pFrame->page.pData + pos, rec->pData, size);
@@ -438,7 +437,6 @@ RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
 
 RC RM_CreateFile(char *fileName, int recordSize)
 {
-
 	int fileID;
 	int sizeRM = sizeof(RM_FileSubHeader);
 
@@ -450,28 +448,28 @@ RC RM_CreateFile(char *fileName, int recordSize)
 	if (temp != SUCCESS)
 		return temp;
 
-	PF_PageHandle* pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
-	temp = AllocatePage(fileID, pageHandle);
+	PF_PageHandle pageHandle;
+	temp = AllocatePage(fileID, &pageHandle);
 	if (temp != SUCCESS)
 		return temp;
 
-	char* bitMap = pageHandle->pFrame->page.pData + sizeRM;
-	bitMap[0] |= 0x3;//0 1页为满
+	
 
-	RM_FileSubHeader* fileSubHeader = (RM_FileSubHeader*)pageHandle->pFrame->page.pData;
+	char* data;
+	GetData(&pageHandle, &data);
+	char* bitMap = data + sizeRM;
+	bitMap[0] |= 0x3;//0 1页为满
+	RM_FileSubHeader* fileSubHeader = (RM_FileSubHeader*)data;
 	fileSubHeader->nRecords = 0;
 	fileSubHeader->recordSize = recordSize;
 	fileSubHeader->recordsPerPage = PF_PAGE_SIZE / (recordSize + 1.0 / 8);//每个页面可以装载的记录数量
 	fileSubHeader->firstRecordOffset = ceil((double)fileSubHeader->recordsPerPage / 8.0);//每页第一个记录在数据区中的开始位置
 
+	temp = MarkDirty(&pageHandle);
+
 	temp = CloseFile(fileID);
 	if (temp != SUCCESS)
 		return temp;
-
-	temp = MarkDirty(pageHandle);
-	if (temp != SUCCESS)
-		return temp;
-	free(pageHandle);
 	return SUCCESS;
 }
 
@@ -489,38 +487,78 @@ RC RM_OpenFile(char *fileName, RM_FileHandle *fileHandle)
 		free(pfHandle);
 		return temp;
 	}
-	PF_PageHandle *pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
-	pageHandle->bOpen = false;
-	GetThisPage(fileID, 1, pageHandle);
+
+	PF_PageHandle pageHandle;
+	pageHandle.bOpen = false;
+	GetThisPage(fileID, 1, &pageHandle);
 	if (temp != SUCCESS) {
 		free(pfHandle);
-		free(pageHandle);
+
 		return temp;
 	}
 
-	fileHandle->bOpen = true;
-	fileHandle->fileName = (char*)malloc(sizeof(char)*320);
+	fileHandle->fileName = (char*)malloc(strlen(fileName) + 1);
 	strcpy(fileHandle->fileName, fileName);
-	//fileHandle->fileName = fileName;
+	fileHandle->bOpen = true;
 	fileHandle->fileDesc = fileID;
-	fileHandle->pHdrFrame = pageHandle->pFrame;
-	fileHandle->pHdrPage = &(pageHandle->pFrame->page);
-	fileHandle->pBitmap = pageHandle->pFrame->page.pData + sizeRM;
-	fileHandle->fileSubHeader = (RM_FileSubHeader*)pageHandle->pFrame->page.pData;
+	fileHandle->pHdrFrame = pageHandle.pFrame;
+	fileHandle->pHdrPage = &(pageHandle.pFrame->page);
+	fileHandle->pBitmap = pageHandle.pFrame->page.pData + sizeRM;
+	fileHandle->fileSubHeader = (RM_FileSubHeader*)pageHandle.pFrame->page.pData;
 
 	free(pfHandle);
-	free(pageHandle);
+	//free(pageHandle);
 	return SUCCESS;
 }
 
-RC RM_CloseFile(RM_FileHandle *fileHandle)
-{
-	if (!fileHandle->bOpen)
-		return RM_FSCLOSED;
+RC RM_CloseFile(RM_FileHandle *fileHandle){
+	if (fileHandle->bOpen == false)
+		return RM_FHCLOSED;
 	fileHandle->pHdrFrame->pinCount--;
 	RC temp = CloseFile(fileHandle->fileDesc);
+	free(fileHandle->fileName);
 	if (temp != SUCCESS)
 		return temp;
 	fileHandle->bOpen = false;
 	return SUCCESS;
+}
+
+void test() {
+	RM_CreateFile("E:\\hustbase\\hustbase\\test",10);
+	RM_FileHandle fileHandle;
+	RM_OpenFile("E:\\hustbase\\hustbase\\test",&fileHandle);
+
+	char* a = (char*)malloc(10);
+	strcpy(a, "asd");
+	RID aRid;
+	InsertRec(&fileHandle, a, &aRid);
+	
+	char* b = (char*)malloc(10);
+	strcpy(b, "zxc");
+	RID bRid;
+	InsertRec(&fileHandle, b, &aRid);
+
+	RM_FileScan fileScan;
+	Con* cona;
+	
+
+	cona->attrType = chars;
+	cona->bLhsIsAttr = 1; cona->bRhsIsAttr = 0;
+	cona->LattrLength = 10; cona->LattrOffset = 0;
+	cona->Rvalue = malloc(10);
+	cona->compOp = EQual;
+	strcpy((char*)cona->Rvalue, "asd");
+
+	OpenScan(&fileScan, &fileHandle, 1, cona);
+	
+	RM_Record rec;
+	GetNextRec(&fileScan, &rec);
+	printf("%s", rec.pData);
+	
+	CloseScan(&fileScan);
+
+	RM_CloseFile(&fileHandle);
+	free(a);
+	free(b);
+	free(cona->Rvalue);
 }
