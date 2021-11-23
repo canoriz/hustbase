@@ -38,13 +38,14 @@ Result<DataBase, RC> DataBase::open(const char* const db_root) {
 }
 
 bool DataBase::close() {
-	if (this->opened) {
-		this->opened = false;
+	const bool FORCE_WRITE = true;
+	if (this->opened | FORCE_WRITE) {
 
 		bool all_table_closed = true;
 		for (auto& t : this->opened_tables) {
 			all_table_closed &= t.close();
 		}
+		this->opened = false;
 		return all_table_closed;
 	}
 
@@ -403,13 +404,19 @@ Result<Table, RC> DataBase::select(
 			tmp_table.scan_open(&file_scan, 0, NULL);
 			auto scan_res = tmp_table.scan_next(&file_scan, &rec);
 
+			// initiate column titles
+			int initiating_col_n = 0;
+			for (auto const& c : tmp_table.meta.columns) {
+				res->type[initiating_col_n] = (AttrType)c.attrtype;
+				res->length[initiating_col_n] = c.attrlength;
+				strcpy(res->fields[initiating_col_n], c.attrname);
+				initiating_col_n++;
+			}
+
 			while (scan_res.ok && scan_res.result) {
 				res->col_num = 0;
 				res->res[res->row_num] = (char**)malloc(sizeof(char*) * tmp_table.meta.columns.size());
 				for (auto const& c : tmp_table.meta.columns) {
-					res->type[res->col_num] = (AttrType)c.attrtype;
-					res->length[res->col_num] = c.attrlength;
-					strcpy(res->fields[res->col_num], c.attrname);
 					res->res[res->row_num][res->col_num] = (char*)malloc(c.attrlength);
 					memcpy(
 						res->res[res->row_num][res->col_num],
