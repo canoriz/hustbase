@@ -164,3 +164,34 @@ Result<ColumnRec*, RC> Table::get_column(char* const column)
 	}
 	return Result<ColumnRec*, RC>::Err(FAIL);
 }
+
+Result<bool, RC> Table::scan_open(RM_FileScan* file_scan, int n_con, Con* conditions)
+{
+	RC scan_opened = OpenScan(file_scan, &this->file, n_con, conditions);
+	if (scan_opened != SUCCESS) {
+		return Result<bool, RC>::Err(scan_opened);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::scan_next(RM_FileScan* file_scan, RM_Record* rec)
+{
+	RC next_got = GetNextRec(file_scan, rec);
+	if (next_got == RM_EOF) {
+		// no next record
+		return Result<bool, RC>::Ok(false);
+	}
+	if (next_got != SUCCESS) {
+		return Result<bool, RC>::Err(next_got);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::scan_close(RM_FileScan* file_scan)
+{
+	RC closed = CloseScan(file_scan);
+	if (closed != SUCCESS) {
+		return Result<bool, RC>::Err(closed);
+	}
+	return Result<bool, RC>::Ok(true);
+}

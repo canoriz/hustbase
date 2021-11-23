@@ -17,7 +17,7 @@ RC nextRec(RM_FileScan* rmFileScan)
 		return temp;
 	int page, slot;
 
-	for (page = rmFileScan->pn; page < fileHandle->pFileSubHeader->pageCount; ++page) {
+	for (page = rmFileScan->pn; page <= fileHandle->pFileSubHeader->pageCount; ++page) {
 		int bitmap = 1 << (page % 8);//位图中位置
 		bool isEmpty = fileHandle->pBitmap[page / 8] & bitmap;
 		if (!isEmpty)
@@ -35,7 +35,7 @@ RC nextRec(RM_FileScan* rmFileScan)
 	}
 
 	//未找到
-	if (page >= fileHandle->pFileSubHeader->pageCount) {
+	if (page > fileHandle->pFileSubHeader->pageCount) {
 		rmFileScan->pn = -1;
 		rmFileScan->sn = -1;
 		rmFileScan->PageHandle.bOpen = false;

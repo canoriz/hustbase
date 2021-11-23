@@ -1,6 +1,8 @@
 #include "QU_Manager.h"
+#include "database.h"
 #pragma warning(disable : 4996)
 
+extern DataBase working_db;
 
 RC Query(char * sql, SelResult * res) {
 	sqlstr* processing_sql = NULL;
@@ -30,7 +32,19 @@ RC Select(
 	int nConditions, Condition* conditions, /* []Condition conditions */
 	SelResult* res)
 {
+	auto select_ok = working_db.select(
+		nSelAttrs, selAttrs,
+		nRelations, relations,
+		nConditions, conditions,
+		res
+	);
+
+	if (!select_ok.ok) {
+		return FAIL;
+	}
+	return SUCCESS;
 	// testing
+	/*
 	res->row_num = 1;
 	res->col_num = 4;
 	res->type[0] = ints;
@@ -60,4 +74,5 @@ RC Select(
 	res->next_res = NULL;
 	return SUCCESS;
 	return FAIL;
+	*/
 }
