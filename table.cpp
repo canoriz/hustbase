@@ -28,14 +28,19 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	int aggregate_size = 0;
 	for (auto i = 0; i < count; i++) {
 		AttrInfo tmp_attr = attrs[i];
+		int real_length = tmp_attr.attrLength;
+		if (tmp_attr.attrType == chars) {
+			real_length = tmp_attr.attrLength + 1;
+		}
 		tmeta.columns.push_back(
 			ColumnRec(
+				name,
 				tmp_attr.attrName, tmp_attr.attrType,
 				tmp_attr.attrLength, aggregate_size,
 				false, ""
 			)
 		);
-		aggregate_size += tmp_attr.attrLength;
+		aggregate_size += real_length;
 	}
 
 	tmeta.table.attrcount = count;
@@ -104,6 +109,7 @@ bool Table::remove_index_flag_on(char* const column)
 		if (strcmp(c.attrname, column) == SAME) {
 			if (c.ix_flag) {
 				c.ix_flag = false;
+				this->dirty = true;
 				return true;
 			}
 			else {
@@ -121,6 +127,7 @@ bool Table::add_index_flag_on(char* const column, char* const index)
 		if (strcmp(c.attrname, column) == SAME) {
 			if (!c.ix_flag) {
 				c.ix_flag = true;
+				this->dirty = true;
 				strcpy(c.indexname, index);
 				return true;
 			}
@@ -137,6 +144,16 @@ bool Table::store_metadata_to(char* const path)
 	return this->meta.write(path);
 }
 
+Result<RID, RC> Table::insert_record(char* const data)
+{
+	RID rid;
+	RC insert = InsertRec(&this->file, data, &rid);
+	if (insert != SUCCESS) {
+		return Result<RID, RC>::Err(insert);
+	}
+	return Result<RID, RC>::Ok(rid);
+}
+
 Result<ColumnRec*, RC> Table::get_column(char* const column)
 {
 	for (auto& c : this->meta.columns) {
@@ -146,4 +163,35 @@ Result<ColumnRec*, RC> Table::get_column(char* const column)
 		}
 	}
 	return Result<ColumnRec*, RC>::Err(FAIL);
+}
+
+Result<bool, RC> Table::scan_open(RM_FileScan* file_scan, int n_con, Con* conditions)
+{
+	RC scan_opened = OpenScan(file_scan, &this->file, n_con, conditions);
+	if (scan_opened != SUCCESS) {
+		return Result<bool, RC>::Err(scan_opened);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::scan_next(RM_FileScan* file_scan, RM_Record* rec)
+{
+	RC next_got = GetNextRec(file_scan, rec);
+	if (next_got == RM_EOF) {
+		// no next record
+		return Result<bool, RC>::Ok(false);
+	}
+	if (next_got != SUCCESS) {
+		return Result<bool, RC>::Err(next_got);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::scan_close(RM_FileScan* file_scan)
+{
+	RC closed = CloseScan(file_scan);
+	if (closed != SUCCESS) {
+		return Result<bool, RC>::Err(closed);
+	}
+	return Result<bool, RC>::Ok(true);
 }

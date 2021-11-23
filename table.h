@@ -14,6 +14,7 @@
 
 class Table {
 public:
+	bool dirty = false;
 	TableMetaData meta;
 	char name[21];
 	RM_FileHandle file;
@@ -29,7 +30,11 @@ public:
 	bool remove_index_flag_on(char* const column);
 	bool add_index_flag_on(char* const column, char* const index);
 	bool store_metadata_to(char* const path);
+	Result<RID, RC> insert_record(char* const data);
 	Result<ColumnRec*, RC> get_column(char* const column);
+	Result<bool, RC> scan_open(RM_FileScan* file_scan, int n_con, Con* conditions);
+	Result<bool, RC> scan_next(RM_FileScan* file_scan, RM_Record* rec);
+	Result<bool, RC> scan_close(RM_FileScan* file_scan);
 };
 
 

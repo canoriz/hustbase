@@ -20,9 +20,9 @@ typedef struct TableRec {
 	int  size;
 } TableRec;
 
-
+#pragma pack(1)
 typedef struct ColumnRec {
-	//char tablename[21];
+	char tablename[21];
 	char attrname[21];
 	int  attrtype;
 	int  attrlength;
@@ -31,6 +31,7 @@ typedef struct ColumnRec {
 	char indexname[21];
 
 	ColumnRec(
+		const char* const name,
 		const char* const _attrname,
 		int _attrtype,
 		int _attrlength,
@@ -41,6 +42,7 @@ typedef struct ColumnRec {
 	ColumnRec();
 
 } ColumnRec;
+#pragma pack()
 
 
 class TableMetaData {
