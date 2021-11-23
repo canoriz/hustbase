@@ -428,6 +428,7 @@ Result<Table, RC> DataBase::select(
 				scan_res = tmp_table.scan_next(&file_scan, &rec);
 			}
 		}
+		// TODO: make table
 		return Result<Table, RC>::Ok(Table());
 	}
 	return Result<Table, RC>();
