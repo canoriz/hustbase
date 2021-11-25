@@ -388,6 +388,7 @@ Result<Table, RC> DataBase::table_product(
 
 	// then, create dest table
 	auto add_t = this->add_table(dest, dest_attr_count, dest_attr_arr);
+	free(dest_attr_arr);
 	if (!add_t.ok) {
 		return Result<Table, RC>::Err(add_t.err);
 	}
@@ -396,11 +397,71 @@ Result<Table, RC> DataBase::table_product(
 		// open destination failed
 		return Result<Table, RC>::Err(dest_t.err);
 	}
+
 	auto prod_res = tbl1.product(tbl2, dest_t.result);
 	if (!prod_res.ok) {
 		return Result<Table, RC>::Err(prod_res.err);
 	}
 	return Result<Table, RC>::Ok(prod_res.result);
+}
+
+Result<bool, RC> DataBase::table_project(
+	char* const t, char* const dest,
+	int n, RelAttr** columns)
+{
+	auto r_from = this->open_table(t);
+	if (!r_from.ok) {
+		return Result<bool, RC>::Err(r_from.err);
+	}
+	Table& tbl = r_from.result;
+
+	// create table dest
+	// first, init paramaters
+	// match every column
+	AttrInfo* dest_attr_arr = (AttrInfo*)malloc(sizeof(AttrInfo) * tbl.meta.table.attrcount);
+	int attr_i = 0;
+	for (auto j = 0; j < n; j++) {
+		char col_with_dot[PATH_SIZE];
+		strcpy(col_with_dot, columns[j]->relName);
+		strcat(col_with_dot, ".");
+		strcat(col_with_dot, columns[j]->attrName);
+
+		bool match = false;
+		for (auto const& c : tbl.meta.columns) {
+			const int SAME = 0;
+			if (strcmp(col_with_dot, c.attrname) == SAME) {
+				dest_attr_arr[attr_i].attrLength = c.attrlength;
+				dest_attr_arr[attr_i].attrName = (char*)malloc(
+					sizeof(char) * (strlen(c.attrname) + 2)
+				);
+				strcpy(dest_attr_arr[attr_i].attrName, c.attrname);
+				dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+				attr_i++;
+				match = true;
+			}
+		}
+		if (!match) {
+			return Result<bool, RC>::Err(FAIL);
+		}
+	}
+
+	// then, create dest table
+	auto add_t = this->add_table(dest, attr_i, dest_attr_arr);
+	free(dest_attr_arr);
+	if (!add_t.ok) {
+		return Result<bool, RC>::Err(add_t.err);
+	}
+	auto dest_t = this->open_table(dest);
+	if (!dest_t.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(dest_t.err);
+	}
+
+	auto proj_res = tbl.project(dest_t.result);
+	if (!proj_res.ok) {
+		return Result<bool, RC>::Err(proj_res.err);
+	}
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::make_unit_table(char* const table_name)
@@ -512,13 +573,21 @@ Result<Table, RC> DataBase::query(
 		}
 	}
 	
-	if (select_all_columns) {
-		res->row_num = 0;
-		res->col_num = 0;
-	}
-	else {
+	if (!select_all_columns) {
+		t1 = dest;
+		dest = mid_tables[n_mid_tables];
+		n_mid_tables++;
 
+		auto proj_res = this->table_project(t1, dest, n_columns, columns);
+		if (!proj_res.ok) {
+			this->drop_table("reserved-unit");
+			for (auto i = 0; i < n_mid_tables; i++) {
+				this->drop_table(mid_tables[i]);
+			}
+			return Result<Table, RC>::Err(proj_res.err);
+		}
 	}
+
 	auto open_res = this->open_table(dest);
 	if (!open_res.ok) {
 		// can not open such table

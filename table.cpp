@@ -282,6 +282,50 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 		scan_a_res = this->scan_next(&scan_a, &rec_a);
 	}
 	free(buf);
+	this->scan_close(&scan_a);
 
 	return Result<Table, RC>::Ok(dest_table);
+}
+
+Result<Table, RC> Table::project(Table& dest)
+{
+	/* make projection */
+
+	int blk_sz = dest.blk_size();
+	RM_FileScan scan;
+	RM_Record rec;
+	auto scan_opened = this->scan_open(&scan, 0, NULL);
+	if (!scan_opened.ok) {
+		// scan open failed
+		return Result<Table, RC>::Err(scan_opened.err);
+	}
+
+	char* buf = (char*)malloc(sizeof(char) * blk_sz);
+	auto scan_res = this->scan_next(&scan, &rec);
+	while (scan_res.ok && scan_res.result) {
+		int offset = 0;
+		for (auto const& c : dest.meta.columns) {
+			auto from_column_res = this->get_column((char*)c.attrname);
+			if (!from_column_res.ok) {
+				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
+			}
+			auto from_column = from_column_res.result;
+			memcpy(
+				buf + offset,
+				rec.pData + from_column->attroffset,
+				from_column->attrlength
+			);
+			offset += from_column->attrlength;
+		}
+
+		auto insert_rec = dest.insert_record(buf);
+		if (!insert_rec.ok) {
+			return Result<Table, RC>::Err(insert_rec.err);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	free(buf);
+	this->scan_close(&scan);
+
+	return Result<Table, RC>::Ok(dest);
 }

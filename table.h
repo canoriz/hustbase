@@ -41,6 +41,7 @@ public:
 	int blk_size();
 
 	Result<Table, RC> product(Table& b, Table& dest_table);
+	Result<Table, RC> project(Table& dest);
 };
 
 
