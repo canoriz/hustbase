@@ -41,7 +41,7 @@ public:
 	Result<Table, RC> open_table(char* const table_name);
 	Result<Index, RC> open_index(char* const index_name);
 	Result<Table, RC> table_product(char* const t1, char* const t2, char* const dest);
-	Result<Table, RC> select(
+	Result<Table, RC> query(
 		int nColumns, RelAttr** columns,        /* []*RelAttr  columns */
 		int nTables, char** tables,             /* *(*char)(*TYPE) tables */
 		int nConditions, Condition* conditions, /* []Condition conditions */

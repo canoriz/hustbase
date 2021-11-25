@@ -32,7 +32,7 @@ RC Select(
 	int nConditions, Condition* conditions, /* []Condition conditions */
 	SelResult* res)
 {
-	auto select_ok = working_db.select(
+	auto select_ok = working_db.query(
 		nSelAttrs, selAttrs,
 		nRelations, relations,
 		nConditions, conditions,
