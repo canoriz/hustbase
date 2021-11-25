@@ -473,6 +473,9 @@ Result<Table, RC> DataBase::select(
 		dest = mid_tables[n_mid_tables];
 		n_mid_tables++;
 		if (!this->table_product(t1, t2, dest).ok) {
+			for (auto i = 0; i < n_mid_tables; i++) {
+				this->drop_table(mid_tables[i]);
+			}
 			return Result<Table, RC>::Err(FAIL);
 		}
 	}
@@ -487,6 +490,9 @@ Result<Table, RC> DataBase::select(
 	auto open_res = this->open_table(dest);
 	if (!open_res.ok) {
 		// can not open such table
+		for (auto i = 0; i < n_mid_tables; i++) {
+			this->drop_table(mid_tables[i]);
+		}
 		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
 	}
 
