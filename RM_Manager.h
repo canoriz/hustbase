@@ -18,7 +18,6 @@ typedef struct {
 	char *pData; 		 //记录所存储的数据 
 }RM_Record;
 
-
 typedef struct
 {
 	int bLhsIsAttr, bRhsIsAttr;//左、右是属性（1）还是值（0）
@@ -28,7 +27,6 @@ typedef struct
 	CompOp compOp;
 	void *Lvalue, *Rvalue;
 }Con;
-
 
 typedef struct __RM_FileHandle {//文件句柄
 	bool bOpen;//句柄是否打开（是否正在被使用）
@@ -58,8 +56,6 @@ typedef struct __RM_FileScan {
 	}
 
 }RM_FileScan;
-
-
 
 RC GetNextRec(RM_FileScan *rmFileScan, RM_Record *rec);
 
