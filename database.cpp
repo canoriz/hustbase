@@ -402,7 +402,7 @@ Result<Table, RC> DataBase::table_product(
 	return Result<Table, RC>::Ok(prod_res.result);
 }
 
-Result<Table, RC> DataBase::select(
+Result<Table, RC> DataBase::query(
 		int n_columns, RelAttr** columns,
 		int n_tables, char** tables, int n_conditions,
 		Condition* conditions, SelResult* res)
