@@ -342,6 +342,68 @@ Result<Index, RC> DataBase::open_index(char* const index_name) {
 	return Result<Index, RC>::Err(res.err);
 }
 
+Result<Table, RC> DataBase::table_product(
+		char* const t1,
+		char* const t2,
+		char* const dest)
+{
+	/* t1 x t2 -> dest */
+	auto r1 = this->open_table(t1);
+	auto r2 = this->open_table(t2);
+	if (!(r1.ok && r2.ok)) {
+		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	Table& tbl1 = r1.result, tbl2 = r2.result;
+
+	// create table dest
+	// first, init paramaters
+	int dest_attr_count = tbl1.meta.table.attrcount + tbl2.meta.table.attrcount;
+	AttrInfo* dest_attr_arr = (AttrInfo*)malloc(sizeof(AttrInfo) * dest_attr_count);
+	int attr_i = 0;
+	for (auto const& c : tbl1.meta.columns) {
+		dest_attr_arr[attr_i].attrLength = c.attrlength;
+		dest_attr_arr[attr_i].attrName = (char*)malloc(
+			sizeof(char) * (
+				strlen(tbl1.name) + strlen(c.attrname) + 2
+				)
+		);
+		strcpy(dest_attr_arr[attr_i].attrName, tbl1.name);
+		strcat(dest_attr_arr[attr_i].attrName, ".");
+		strcat(dest_attr_arr[attr_i].attrName, c.attrname);
+		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+		attr_i++;
+	}
+	for (auto const& c : tbl2.meta.columns) {
+		dest_attr_arr[attr_i].attrLength = c.attrlength;
+		dest_attr_arr[attr_i].attrName = (char*)malloc(
+			sizeof(char) * (
+				strlen(tbl2.name) + strlen(c.attrname) + 2
+				)
+		);
+		strcpy(dest_attr_arr[attr_i].attrName, tbl2.name);
+		strcat(dest_attr_arr[attr_i].attrName, ".");
+		strcat(dest_attr_arr[attr_i].attrName, c.attrname);
+		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+		attr_i++;
+	}
+
+	// then, create dest table
+	if (!this->add_table(dest, dest_attr_count, dest_attr_arr).ok) {
+		return Result<Table, RC>::Err(TABLE_CREATE_FAILED);
+	}
+	auto dest_t = this->open_table(dest);
+	if (!dest_t.ok) {
+		// open destination failed
+		return Result<Table, RC>::Err(FAIL);
+	}
+	auto prod_res = tbl1.product(tbl2, dest_t.result);
+	if (!prod_res.ok) {
+		return Result<Table, RC>::Err(FAIL);
+	}
+	return Result<Table, RC>::Ok(prod_res.result);
+}
+
 Result<Table, RC> DataBase::select(
 		int n_columns, RelAttr** columns,
 		int n_tables, char** tables, int n_conditions,
@@ -349,9 +411,11 @@ Result<Table, RC> DataBase::select(
 {
 	const int SAME = 0;
 	bool select_all_columns = false;
-	if (n_columns <= 0 || n_tables <= 0 || n_tables > 1) {
+	if (n_columns <= 0 || n_tables <= 0) {
 		return Result<Table, RC>::Err(FAIL);
 	}
+
+	// make columns
 	for (auto i = 0; i < n_columns; i++) {
 		RelAttr* col_ptr = columns[i];
 		if (strcmp(col_ptr->attrName, "*") == SAME) {
@@ -359,8 +423,8 @@ Result<Table, RC> DataBase::select(
 			select_all_columns = true;
 			break;
 		}
-		else if (strlen(col_ptr->relName) == 0) {
-			// table name missing
+		else if (col_ptr->relName == NULL) {
+			// table name missing, get it!
 			for (auto j = 0; j < n_tables; j++) {
 				char* table_name = tables[j];
 
@@ -371,65 +435,68 @@ Result<Table, RC> DataBase::select(
 				}
 
 				Table tmp_table = res.result;
-				if (tmp_table.get_column(col_ptr->relName).ok) {
+				if (tmp_table.get_column(col_ptr->attrName).ok) {
 					// found correspodent table of col_ptr->attrName
 					// make up it in RelAttr struct
+					col_ptr->relName = (char*)malloc(
+						sizeof(char) * (1 + strlen(tmp_table.name))
+					);
 					strcpy(col_ptr->relName, tmp_table.name);
 					break;
 				}
 			}
 
-			if (strlen(col_ptr->relName) == 0) {
+			if (col_ptr->relName == NULL) {
+				// FLIED£¿ FIELD£¡
 				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
 			}
+		}
+	}
+
+	// maximum 8 predefined middle results
+	char mid_tables[8][10] = {
+		"mid-t1",
+		"mid-t2",
+		"mid-t3",
+		"mid-t4",
+		"mid-t5",
+		"mid-t6",
+		"mid-t7",
+		"mid-t8",
+	};
+	int n_mid_tables = 0;
+	char* t1 = NULL;
+	char* t2 = NULL;
+	char* dest = tables[0];
+	// make product
+	for (auto i = 1; i < n_tables; i++) {
+		t1 = dest;
+		t2 = tables[i];
+		dest = mid_tables[n_mid_tables];
+		n_mid_tables++;
+		if (!this->table_product(t1, t2, dest).ok) {
+			return Result<Table, RC>::Err(FAIL);
 		}
 	}
 	
 	if (select_all_columns) {
 		res->row_num = 0;
 		res->col_num = 0;
-		for (auto j = 0; j < n_tables; j++) {
-			// actually n_tables = 1
-			char* table_name = tables[j];
-
-			auto open_res = this->open_table(table_name);
-			if (!open_res.ok) {
-				// can not open such table
-				return Result<Table, RC>::Err(TABLE_NOT_EXIST);
-			}
-
-			Table tmp_table = open_res.result;
-			RM_FileScan file_scan;
-			RM_Record rec;
-			tmp_table.scan_open(&file_scan, 0, NULL);
-			auto scan_res = tmp_table.scan_next(&file_scan, &rec);
-
-			// initiate column titles
-			int initiating_col_n = 0;
-			for (auto const& c : tmp_table.meta.columns) {
-				res->type[initiating_col_n] = (AttrType)c.attrtype;
-				res->length[initiating_col_n] = c.attrlength;
-				strcpy(res->fields[initiating_col_n], c.attrname);
-				initiating_col_n++;
-			}
-
-			while (scan_res.ok && scan_res.result) {
-				res->col_num = 0;
-				res->res[res->row_num] = (char**)malloc(sizeof(char*) * tmp_table.meta.columns.size());
-				for (auto const& c : tmp_table.meta.columns) {
-					res->res[res->row_num][res->col_num] = (char*)malloc(c.attrlength);
-					memcpy(
-						res->res[res->row_num][res->col_num],
-						rec.pData + c.attroffset, c.attrlength
-					);
-					res->col_num++;
-				}
-				res->row_num++;
-				scan_res = tmp_table.scan_next(&file_scan, &rec);
-			}
-		}
-		// TODO: make table
-		return Result<Table, RC>::Ok(Table());
 	}
-	return Result<Table, RC>();
+	else {
+
+	}
+	auto open_res = this->open_table(dest);
+	if (!open_res.ok) {
+		// can not open such table
+		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	Table tmp_table = open_res.result;
+	tmp_table.make_select_result(res);
+	// TODO: make table
+	for (auto i = 0; i < n_mid_tables; i++) {
+		this->drop_table(mid_tables[i]);
+	}
+	return Result<Table, RC>::Ok(Table());
 }
