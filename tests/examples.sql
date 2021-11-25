@@ -20,7 +20,10 @@ select * from student, teacher, worker;
 select * from SYSTABLE;
 select * from SYSCOLUMN;
 
-/* TODO */
 select sname from student;
+select sname,sno from student;
+
+/* TODO */
+
 select * from student, teachers where student.sage=teachers.id and sname="asdf";
 update student set sage=22 where sname=lucy;
