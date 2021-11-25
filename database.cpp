@@ -342,7 +342,7 @@ Result<Index, RC> DataBase::open_index(char* const index_name) {
 	return Result<Index, RC>::Err(res.err);
 }
 
-Result<Table, RC> DataBase::table_product(
+Result<bool, RC> DataBase::table_product(
 		char* const t1,
 		char* const t2,
 		char* const dest)
@@ -351,7 +351,7 @@ Result<Table, RC> DataBase::table_product(
 	auto r1 = this->open_table(t1);
 	auto r2 = this->open_table(t2);
 	if (!(r1.ok && r2.ok)) {
-		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
 	}
 
 	Table& tbl1 = r1.result, tbl2 = r2.result;
@@ -390,19 +390,19 @@ Result<Table, RC> DataBase::table_product(
 	auto add_t = this->add_table(dest, dest_attr_count, dest_attr_arr);
 	free(dest_attr_arr);
 	if (!add_t.ok) {
-		return Result<Table, RC>::Err(add_t.err);
+		return Result<bool, RC>::Err(add_t.err);
 	}
 	auto dest_t = this->open_table(dest);
 	if (!dest_t.ok) {
 		// open destination failed
-		return Result<Table, RC>::Err(dest_t.err);
+		return Result<bool, RC>::Err(dest_t.err);
 	}
 
 	auto prod_res = tbl1.product(tbl2, dest_t.result);
 	if (!prod_res.ok) {
-		return Result<Table, RC>::Err(prod_res.err);
+		return Result<bool, RC>::Err(prod_res.err);
 	}
-	return Result<Table, RC>::Ok(prod_res.result);
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::table_project(
