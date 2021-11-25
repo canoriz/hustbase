@@ -10,6 +10,7 @@
 #include "result.h"
 #include "metadata.h"
 #include "RM_Manager.h"
+#include "QU_Manager.h"
 
 
 class Table {
@@ -35,6 +36,10 @@ public:
 	Result<bool, RC> scan_open(RM_FileScan* file_scan, int n_con, Con* conditions);
 	Result<bool, RC> scan_next(RM_FileScan* file_scan, RM_Record* rec);
 	Result<bool, RC> scan_close(RM_FileScan* file_scan);
+	bool make_select_result(SelResult* res);
+	int blk_size();
+
+	Result<Table, RC> product(Table& b, Table& dest_table);
 };
 
 

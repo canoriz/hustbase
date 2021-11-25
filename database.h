@@ -40,6 +40,7 @@ public:
 	Result<bool, RC> insert(char* const table, const int n, Value* const vals);
 	Result<Table, RC> open_table(char* const table_name);
 	Result<Index, RC> open_index(char* const index_name);
+	Result<Table, RC> table_product(char* const t1, char* const t2, char* const dest);
 	Result<Table, RC> select(
 		int nColumns, RelAttr** columns,        /* []*RelAttr  columns */
 		int nTables, char** tables,             /* *(*char)(*TYPE) tables */

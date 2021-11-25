@@ -195,3 +195,85 @@ Result<bool, RC> Table::scan_close(RM_FileScan* file_scan)
 	}
 	return Result<bool, RC>::Ok(true);
 }
+
+bool Table::make_select_result(SelResult* res)
+{
+	// ugly, stupid and complex
+	RM_FileScan file_scan;
+	RM_Record rec;
+	this->scan_open(&file_scan, 0, NULL);
+	auto scan_res = this->scan_next(&file_scan, &rec);
+
+	// initiate column titles
+	int initiating_col_n = 0;
+	for (auto const& c : this->meta.columns) {
+		res->type[initiating_col_n] = (AttrType)c.attrtype;
+		res->length[initiating_col_n] = c.attrlength;
+		strcpy(res->fields[initiating_col_n], c.attrname);
+		initiating_col_n++;
+	}
+
+	while (scan_res.ok && scan_res.result) {
+		// TODO 100+ make list
+		res->col_num = 0;
+		res->res[res->row_num] = (char**)malloc(sizeof(char*) * this->meta.columns.size());
+		for (auto const& c : this->meta.columns) {
+			res->res[res->row_num][res->col_num] = (char*)malloc(c.attrlength);
+			memcpy(
+				res->res[res->row_num][res->col_num],
+				rec.pData + c.attroffset, c.attrlength
+			);
+			res->col_num++;
+		}
+		res->row_num++;
+		scan_res = this->scan_next(&file_scan, &rec);
+	}
+	this->scan_close(&file_scan);
+	return true;
+}
+
+int Table::blk_size()
+{
+	// one record's size (in bytes)
+	return this->meta.table.size;
+}
+
+Result<Table, RC> Table::product(Table& b, Table& dest_table)
+{
+	/* make cartesian product */
+
+	// now, make product
+	int blk_sz = this->blk_size() + b.blk_size();
+	RM_FileScan scan_a;
+	RM_Record rec_a;
+	if (!this->scan_open(&scan_a, 0, NULL).ok) {
+		// scan this failed
+		return Result<Table, RC>::Err(FAIL);
+	}
+
+	char* buf = (char*)malloc(sizeof(char) * blk_sz);
+	auto scan_a_res = this->scan_next(&scan_a, &rec_a);
+	while (scan_a_res.ok && scan_a_res.result) {
+		RM_FileScan scan_b;
+		RM_Record rec_b;
+		if (!b.scan_open(&scan_b, 0, NULL).ok) {
+			// scan B failed
+			return Result<Table, RC>::Err(FAIL);
+		}
+		auto scan_b_res = b.scan_next(&scan_b, &rec_b);
+
+		while (scan_b_res.ok && scan_b_res.result) {
+			memcpy(buf, rec_a.pData, this->blk_size());
+			memcpy(buf + this->blk_size(), rec_b.pData, b.blk_size());
+			if (!dest_table.insert_record(buf).ok) {
+				return Result<Table, RC>::Err(FAIL);
+			}
+			scan_b_res = b.scan_next(&scan_b, &rec_b);
+		}
+		b.scan_close(&scan_b);
+		scan_a_res = this->scan_next(&scan_a, &rec_a);
+	}
+	free(buf);
+
+	return Result<Table, RC>::Ok(dest_table);
+}
