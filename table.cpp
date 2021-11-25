@@ -303,7 +303,6 @@ Result<Table, RC> Table::project(Table& dest)
 	char* buf = (char*)malloc(sizeof(char) * blk_sz);
 	auto scan_res = this->scan_next(&scan, &rec);
 	while (scan_res.ok && scan_res.result) {
-		int offset = 0;
 		for (auto const& c : dest.meta.columns) {
 			auto from_column_res = this->get_column((char*)c.attrname);
 			if (!from_column_res.ok) {
@@ -311,11 +310,10 @@ Result<Table, RC> Table::project(Table& dest)
 			}
 			auto from_column = from_column_res.result;
 			memcpy(
-				buf + offset,
+				buf + c.attroffset,
 				rec.pData + from_column->attroffset,
 				from_column->attrlength
 			);
-			offset += from_column->attrlength;
 		}
 
 		auto insert_rec = dest.insert_record(buf);
