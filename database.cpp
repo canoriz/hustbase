@@ -368,9 +368,7 @@ Result<Table, RC> DataBase::table_product(
 				strlen(tbl1.name) + strlen(c.attrname) + 2
 				)
 		);
-		strcpy(dest_attr_arr[attr_i].attrName, tbl1.name);
-		strcat(dest_attr_arr[attr_i].attrName, ".");
-		strcat(dest_attr_arr[attr_i].attrName, c.attrname);
+		strcpy(dest_attr_arr[attr_i].attrName, c.attrname);
 		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
 		attr_i++;
 	}
