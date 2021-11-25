@@ -531,59 +531,38 @@ Result<Table, RC> DataBase::query(
 		}
 	}
 
-	// maximum 8 predefined middle results
-	char mid_tables[8][10] = {
-		"mid-t1",
-		"mid-t2",
-		"mid-t3",
-		"mid-t4",
-		"mid-t5",
-		"mid-t6",
-		"mid-t7",
-		"mid-t8",
-	};
-
 	/* unit table reserved-unit:
 	   for any t,
 	   cartesian_product(u, t) = t
 	   cartesian_product(t, u) = t */
-	if (!this->make_unit_table("reserved-unit").ok ||
-		!this->open_table("reserved-unit").ok) {
-		this->drop_table("reserved-unit");
-		return Result<Table, RC>::Err(FAIL);
-	}
-	int n_mid_tables = 0;
 	char* t1 = NULL;
 	char* t2 = NULL;
-	char* dest = "reserved-unit";
+	char* dest = this->get_a_tmp_table();
+	if (!this->make_unit_table(dest).ok ||
+		!this->open_table(dest).ok) {
+		this->drop_table(dest);
+		return Result<Table, RC>::Err(FAIL);
+	}
 
 	// make product
 	for (auto i = 0; i < n_tables; i++) {
 		t1 = dest;
 		t2 = tables[i];
-		dest = mid_tables[n_mid_tables];
-		n_mid_tables++;
+		dest = get_a_tmp_table();
 		auto mk_prod = this->table_product(t1, t2, dest);
 		if (!mk_prod.ok) {
-			this->drop_table("reserved-unit");
-			for (auto i = 0; i < n_mid_tables; i++) {
-				this->drop_table(mid_tables[i]);
-			}
+			this->release_all_tmp_tables();
 			return Result<Table, RC>::Err(mk_prod.err);
 		}
 	}
 	
 	if (!select_all_columns) {
 		t1 = dest;
-		dest = mid_tables[n_mid_tables];
-		n_mid_tables++;
+		dest = this->get_a_tmp_table();
 
 		auto proj_res = this->table_project(t1, dest, n_columns, columns);
 		if (!proj_res.ok) {
-			this->drop_table("reserved-unit");
-			for (auto i = 0; i < n_mid_tables; i++) {
-				this->drop_table(mid_tables[i]);
-			}
+			this->release_all_tmp_tables();
 			return Result<Table, RC>::Err(proj_res.err);
 		}
 	}
@@ -591,19 +570,70 @@ Result<Table, RC> DataBase::query(
 	auto open_res = this->open_table(dest);
 	if (!open_res.ok) {
 		// can not open such table
-		this->drop_table("reserved-unit");
-		for (auto i = 0; i < n_mid_tables; i++) {
-			this->drop_table(mid_tables[i]);
-		}
+		this->release_all_tmp_tables();
 		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
 	}
 
 	Table tmp_table = open_res.result;
 	tmp_table.make_select_result(res);
 	// TODO: make table
-	this->drop_table("reserved-unit");
-	for (auto i = 0; i < n_mid_tables; i++) {
-		this->drop_table(mid_tables[i]);
-	}
+	this->release_all_tmp_tables();
 	return Result<Table, RC>::Ok(Table());
+}
+
+char* const DataBase::get_a_tmp_table()
+{
+	// maximum 16 predefined middle results
+	static const char tmp_tables[16][16] = {
+			"reserved-tmp0",
+			"reserved-tmp1",
+			"reserved-tmp2",
+			"reserved-tmp3",
+			"reserved-tmp4",
+			"reserved-tmp5",
+			"reserved-tmp6",
+			"reserved-tmp7",
+
+			"reserved-tmp8",
+			"reserved-tmp9",
+			"reserved-tmpa",
+			"reserved-tmpb",
+			"reserved-tmpc",
+			"reserved-tmpd",
+			"reserved-tmpe",
+			"reserved-tmpf"
+	};
+	char* const out_table = (char*)tmp_tables[this->next_tmp_table];
+	this->next_tmp_table++;
+	return out_table;
+}
+
+bool DataBase::release_all_tmp_tables()
+{
+	// maximum 16 predefined middle results
+	static const char tmp_tables[16][16] = {
+			"reserved-tmp0",
+			"reserved-tmp1",
+			"reserved-tmp2",
+			"reserved-tmp3",
+			"reserved-tmp4",
+			"reserved-tmp5",
+			"reserved-tmp6",
+			"reserved-tmp7",
+
+			"reserved-tmp8",
+			"reserved-tmp9",
+			"reserved-tmpa",
+			"reserved-tmpb",
+			"reserved-tmpc",
+			"reserved-tmpd",
+			"reserved-tmpe",
+			"reserved-tmpf"
+	};
+	bool all_released = true;
+	for (int i = 0; i < this->next_tmp_table; i++) {
+		all_released = all_released & this->drop_table((char*)tmp_tables[i]).ok;
+	}
+	this->next_tmp_table = 0;
+	return all_released;
 }

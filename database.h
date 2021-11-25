@@ -13,6 +13,7 @@ class DataBase {
 private:
 	char sysroot[PATH_SIZE];
 	bool opened;
+	int  next_tmp_table;
 
 	std::vector<Table> opened_tables;
 	std::vector<Index> opened_indices;
@@ -26,6 +27,7 @@ public:
 	DataBase(const char* const dbpath = "") {
 		strcpy(this->sysroot, dbpath);
 		this->opened = false;
+		this->next_tmp_table = 0;
 	}
 	char* const name();
 	bool in_use();
@@ -48,6 +50,9 @@ public:
 		int nTables, char** tables,             /* *(*char)(*TYPE) tables */
 		int nConditions, Condition* conditions, /* []Condition conditions */
 		SelResult* res);
+
+	char* const get_a_tmp_table();
+	bool release_all_tmp_tables();
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
