@@ -243,7 +243,7 @@ int Table::blk_size()
 	return this->meta.table.size;
 }
 
-Result<Table, RC> Table::product(Table& b, Table& dest_table)
+Result<bool, RC> Table::product(Table& b, Table& dest_table)
 {
 	/* make cartesian product */
 
@@ -254,7 +254,7 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 	auto scan_a_open = this->scan_open(&scan_a, 0, NULL);
 	if (!scan_a_open.ok) {
 		// scan this failed
-		return Result<Table, RC>::Err(scan_a_open.err);
+		return Result<bool, RC>::Err(scan_a_open.err);
 	}
 
 	char* buf = (char*)malloc(sizeof(char) * blk_sz);
@@ -265,7 +265,7 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 		auto scan_b_open = b.scan_open(&scan_b, 0, NULL);
 		if (!scan_b_open.ok) {
 			// scan B failed
-			return Result<Table, RC>::Err(scan_b_open.err);
+			return Result<bool, RC>::Err(scan_b_open.err);
 		}
 		auto scan_b_res = b.scan_next(&scan_b, &rec_b);
 
@@ -274,7 +274,7 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 			memcpy(buf + this->blk_size(), rec_b.pData, b.blk_size());
 			auto insert_rec = dest_table.insert_record(buf);
 			if (!insert_rec.ok) {
-				return Result<Table, RC>::Err(insert_rec.err);
+				return Result<bool, RC>::Err(insert_rec.err);
 			}
 			scan_b_res = b.scan_next(&scan_b, &rec_b);
 		}
@@ -284,10 +284,10 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 	free(buf);
 	this->scan_close(&scan_a);
 
-	return Result<Table, RC>::Ok(dest_table);
+	return Result<bool, RC>::Ok(true);
 }
 
-Result<Table, RC> Table::project(Table& dest)
+Result<bool, RC> Table::project(Table& dest)
 {
 	/* make projection */
 
@@ -297,7 +297,7 @@ Result<Table, RC> Table::project(Table& dest)
 	auto scan_opened = this->scan_open(&scan, 0, NULL);
 	if (!scan_opened.ok) {
 		// scan open failed
-		return Result<Table, RC>::Err(scan_opened.err);
+		return Result<bool, RC>::Err(scan_opened.err);
 	}
 
 	char* buf = (char*)malloc(sizeof(char) * blk_sz);
@@ -306,7 +306,7 @@ Result<Table, RC> Table::project(Table& dest)
 		for (auto const& c : dest.meta.columns) {
 			auto from_column_res = this->get_column((char*)c.attrname);
 			if (!from_column_res.ok) {
-				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
+				return Result<bool, RC>::Err(FLIED_NOT_EXIST);
 			}
 			auto from_column = from_column_res.result;
 			memcpy(
@@ -318,12 +318,12 @@ Result<Table, RC> Table::project(Table& dest)
 
 		auto insert_rec = dest.insert_record(buf);
 		if (!insert_rec.ok) {
-			return Result<Table, RC>::Err(insert_rec.err);
+			return Result<bool, RC>::Err(insert_rec.err);
 		}
 		scan_res = this->scan_next(&scan, &rec);
 	}
 	free(buf);
 	this->scan_close(&scan);
 
-	return Result<Table, RC>::Ok(dest);
+	return Result<bool, RC>::Ok(true);
 }
