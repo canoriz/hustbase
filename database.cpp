@@ -387,19 +387,38 @@ Result<Table, RC> DataBase::table_product(
 	}
 
 	// then, create dest table
-	if (!this->add_table(dest, dest_attr_count, dest_attr_arr).ok) {
-		return Result<Table, RC>::Err(TABLE_CREATE_FAILED);
+	auto add_t = this->add_table(dest, dest_attr_count, dest_attr_arr);
+	if (!add_t.ok) {
+		return Result<Table, RC>::Err(add_t.err);
 	}
 	auto dest_t = this->open_table(dest);
 	if (!dest_t.ok) {
 		// open destination failed
-		return Result<Table, RC>::Err(FAIL);
+		return Result<Table, RC>::Err(dest_t.err);
 	}
 	auto prod_res = tbl1.product(tbl2, dest_t.result);
 	if (!prod_res.ok) {
-		return Result<Table, RC>::Err(FAIL);
+		return Result<Table, RC>::Err(prod_res.err);
 	}
 	return Result<Table, RC>::Ok(prod_res.result);
+}
+
+Result<bool, RC> DataBase::make_unit_table(char* const table_name)
+{
+	auto mk_unit = this->add_table(table_name, 0, NULL);
+	if (!mk_unit.ok) {
+		return Result<bool, RC>::Err(mk_unit.err);
+	}
+	auto unit_t_open = this->open_table(table_name);
+	if (!unit_t_open.ok) {
+		return Result<bool, RC>::Err(unit_t_open.err);
+	}
+	auto& unit_t = unit_t_open.result;
+	auto insert_none = unit_t.insert_record("");
+	if (!insert_none.ok) {
+		return Result<bool, RC>::Err(insert_none.err);
+	}
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<Table, RC> DataBase::query(
@@ -462,21 +481,34 @@ Result<Table, RC> DataBase::query(
 		"mid-t7",
 		"mid-t8",
 	};
+
+	/* unit table reserved-unit:
+	   for any t,
+	   cartesian_product(u, t) = t
+	   cartesian_product(t, u) = t */
+	if (!this->make_unit_table("reserved-unit").ok ||
+		!this->open_table("reserved-unit").ok) {
+		this->drop_table("reserved-unit");
+		return Result<Table, RC>::Err(FAIL);
+	}
 	int n_mid_tables = 0;
 	char* t1 = NULL;
 	char* t2 = NULL;
-	char* dest = tables[0];
+	char* dest = "reserved-unit";
+
 	// make product
-	for (auto i = 1; i < n_tables; i++) {
+	for (auto i = 0; i < n_tables; i++) {
 		t1 = dest;
 		t2 = tables[i];
 		dest = mid_tables[n_mid_tables];
 		n_mid_tables++;
-		if (!this->table_product(t1, t2, dest).ok) {
+		auto mk_prod = this->table_product(t1, t2, dest);
+		if (!mk_prod.ok) {
+			this->drop_table("reserved-unit");
 			for (auto i = 0; i < n_mid_tables; i++) {
 				this->drop_table(mid_tables[i]);
 			}
-			return Result<Table, RC>::Err(FAIL);
+			return Result<Table, RC>::Err(mk_prod.err);
 		}
 	}
 	
@@ -490,6 +522,7 @@ Result<Table, RC> DataBase::query(
 	auto open_res = this->open_table(dest);
 	if (!open_res.ok) {
 		// can not open such table
+		this->drop_table("reserved-unit");
 		for (auto i = 0; i < n_mid_tables; i++) {
 			this->drop_table(mid_tables[i]);
 		}
@@ -499,6 +532,7 @@ Result<Table, RC> DataBase::query(
 	Table tmp_table = open_res.result;
 	tmp_table.make_select_result(res);
 	// TODO: make table
+	this->drop_table("reserved-unit");
 	for (auto i = 0; i < n_mid_tables; i++) {
 		this->drop_table(mid_tables[i]);
 	}

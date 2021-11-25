@@ -63,6 +63,11 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	return Result<bool, RC>(true);
 }
 
+Result<bool, RC> Table::create_prod_unit(char* path, char* name)
+{
+	return Table::create(path, name, 0, NULL);
+}
+
 Result<Table, RC> Table::open(char* path, char* name) {
 	char full_path[PATH_SIZE] = "";
 	// metadata path
@@ -246,9 +251,10 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 	int blk_sz = this->blk_size() + b.blk_size();
 	RM_FileScan scan_a;
 	RM_Record rec_a;
-	if (!this->scan_open(&scan_a, 0, NULL).ok) {
+	auto scan_a_open = this->scan_open(&scan_a, 0, NULL);
+	if (!scan_a_open.ok) {
 		// scan this failed
-		return Result<Table, RC>::Err(FAIL);
+		return Result<Table, RC>::Err(scan_a_open.err);
 	}
 
 	char* buf = (char*)malloc(sizeof(char) * blk_sz);
@@ -256,17 +262,19 @@ Result<Table, RC> Table::product(Table& b, Table& dest_table)
 	while (scan_a_res.ok && scan_a_res.result) {
 		RM_FileScan scan_b;
 		RM_Record rec_b;
-		if (!b.scan_open(&scan_b, 0, NULL).ok) {
+		auto scan_b_open = b.scan_open(&scan_b, 0, NULL);
+		if (!scan_b_open.ok) {
 			// scan B failed
-			return Result<Table, RC>::Err(FAIL);
+			return Result<Table, RC>::Err(scan_b_open.err);
 		}
 		auto scan_b_res = b.scan_next(&scan_b, &rec_b);
 
 		while (scan_b_res.ok && scan_b_res.result) {
 			memcpy(buf, rec_a.pData, this->blk_size());
 			memcpy(buf + this->blk_size(), rec_b.pData, b.blk_size());
-			if (!dest_table.insert_record(buf).ok) {
-				return Result<Table, RC>::Err(FAIL);
+			auto insert_rec = dest_table.insert_record(buf);
+			if (!insert_rec.ok) {
+				return Result<Table, RC>::Err(insert_rec.err);
 			}
 			scan_b_res = b.scan_next(&scan_b, &rec_b);
 		}

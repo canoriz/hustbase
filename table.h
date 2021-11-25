@@ -23,6 +23,7 @@ public:
 public:
 	Table() :name("") {}
 	static Result<bool, RC>  create(char* path, char* name, int count, AttrInfo* attrs);
+	static Result<bool, RC>  create_prod_unit(char* path, char* name);
 	static Result<Table, RC> open(char* path, char* name);
 
 public:
