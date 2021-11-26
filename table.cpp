@@ -327,3 +327,83 @@ Result<bool, RC> Table::project(Table& dest)
 
 	return Result<bool, RC>::Ok(true);
 }
+
+Result<bool, RC> Table::select(Table& dest, int n_con, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n_con);
+	for (int i = 0; i < n_con; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if(!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n_con, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		auto insert_rec = dest.insert_record(rec.pData);
+		if (!insert_rec.ok) {
+			free(cons);
+			return Result<bool, RC>::Err(insert_rec.err);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::turn_to_con(Condition* cond, Con* con)
+{
+	con->bLhsIsAttr = cond->bLhsIsAttr;
+	con->bRhsIsAttr = cond->bRhsIsAttr;
+	con->compOp = cond->op;
+	char full_name[PATH_SIZE];
+	if (cond->bLhsIsAttr) {
+		strcpy(full_name, cond->lhsAttr.relName);
+		strcat(full_name, ".");
+		strcat(full_name, cond->lhsAttr.attrName);
+		auto res = this->get_column(full_name);
+		if (!res.ok) {
+			return Result<bool, RC>::Err(FLIED_NOT_EXIST);
+		}
+		auto const& col = res.result;
+		con->attrType    = (AttrType)col->attrtype;
+		con->LattrLength = col->attrlength;
+		con->LattrOffset = col->attroffset;
+
+	}
+	else {
+		con->Lvalue   = cond->lhsValue.data;
+		con->attrType = cond->lhsValue.type;
+	}
+
+	if (cond->bRhsIsAttr) {
+		strcpy(full_name, cond->rhsAttr.relName);
+		strcat(full_name, ".");
+		strcat(full_name, cond->rhsAttr.attrName);
+		auto res = this->get_column(full_name);
+		if (!res.ok) {
+			return Result<bool, RC>::Err(FLIED_NOT_EXIST);
+		}
+		auto const& col = res.result;
+		if ((AttrType)col->attrtype != con->attrType) {
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		con->RattrLength = col->attrlength;
+		con->RattrOffset = col->attroffset;
+	}
+	else {
+		if (cond->rhsValue.type != con->attrType) {
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		con->Rvalue = cond->rhsValue.data;
+	}
+	return Result<bool, RC>::Ok(true);
+}
