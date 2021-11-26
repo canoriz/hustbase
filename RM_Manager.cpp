@@ -432,7 +432,7 @@ RC UpdateRec(RM_FileHandle *fileHandle, const RM_Record *rec){
 	MarkDirty(&pageHandle);
 	fileHandle->pHdrFrame->bDirty = true;
 	UnpinPage(&pageHandle);
-	return FAIL;
+	return SUCCESS;
 }
 
 RC RM_CreateFile(char *fileName, int recordSize)

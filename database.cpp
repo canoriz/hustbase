@@ -405,6 +405,29 @@ Result<bool, RC> DataBase::table_product(
 	return Result<bool, RC>::Ok(true);
 }
 
+Result<bool, RC> DataBase::delete_record(
+		char* const table_name, int n, Condition* conditions
+) {
+	auto t_open = this->open_table(table_name);
+	if (!t_open.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(t_open.err);
+	}
+	return t_open.result.remove_match(n, conditions);
+}
+
+Result<bool, RC> DataBase::update_record(
+		char* const table_name, char* const column_name,
+		Value* v, int n, Condition* conditions
+) {
+	auto t_open = this->open_table(table_name);
+	if (!t_open.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(t_open.err);
+	}
+	return t_open.result.update_match(column_name, v, n, conditions);
+}
+
 Result<bool, RC> DataBase::table_project(
 	char* const t, char* const dest,
 	int n, RelAttr** columns)

@@ -42,6 +42,11 @@ public:
 	Result<bool, RC> insert(char* const table, const int n, Value* const vals);
 	Result<Table, RC> open_table(char* const table_name);
 	Result<Index, RC> open_index(char* const index_name);
+	Result<bool, RC> update_record(
+		char* const table_name, char* const column_name, Value* v,
+		int n, Condition* conditions
+	);
+	Result<bool, RC> delete_record(char* const table_name, int n, Condition* conditions);
 	Result<bool, RC> table_product(char* const t1, char* const t2, char* const dest);
 	Result<bool, RC> table_project(char* const t, char* const dest, int n, RelAttr** columns);
 	Result<bool, RC> table_select(char* const t, char* const dest, int n, Condition* conditions);

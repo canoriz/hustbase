@@ -44,6 +44,12 @@ public:
 	Result<bool, RC> project(Table& dest);
 	Result<bool, RC> select(Table& dest, int n_con, Condition* conditions);
 
+	Result<bool, RC> update_match(
+		char* column, Value* v,
+		int  n, Condition* conditions
+	);
+	Result<bool, RC> remove_match(int n, Condition* conditions);
+
 private:
 	Result<bool, RC> turn_to_con(Condition* cond, Con* con);
 };

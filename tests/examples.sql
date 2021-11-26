@@ -31,7 +31,11 @@ select sname, tname from student, teacher where student.sgender = teacher.tgende
 select sname, tname, wname from student, teacher, worker;
 select * from student where sname="lucy";
 
+update student set sage=25 where sname="lucy";
+delete from sss where sname="lucy";
+
 /* TODO */
 
 select * from student, teachers where student.sage=teachers.id and sname="asdf";
-update student set sage=22 where sname=lucy;
+update student set sage=25 where sname="lucy";
+update sss set sage=25 where sname="lucy";
