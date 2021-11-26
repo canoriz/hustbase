@@ -32,15 +32,15 @@ RC Select(
 	int nConditions, Condition* conditions, /* []Condition conditions */
 	SelResult* res)
 {
-	auto select_ok = working_db.query(
+	auto query_ok = working_db.query(
 		nSelAttrs, selAttrs,
 		nRelations, relations,
 		nConditions, conditions,
 		res
 	);
 
-	if (!select_ok.ok) {
-		return FAIL;
+	if (!query_ok.ok) {
+		return query_ok.err;
 	}
 	return SUCCESS;
 	// testing

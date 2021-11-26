@@ -44,6 +44,7 @@ public:
 	Result<Index, RC> open_index(char* const index_name);
 	Result<bool, RC> table_product(char* const t1, char* const t2, char* const dest);
 	Result<bool, RC> table_project(char* const t, char* const dest, int n, RelAttr** columns);
+	Result<bool, RC> table_select(char* const t, char* const dest, int n, Condition* conditions);
 	Result<bool, RC> make_unit_table(char* const table_name);
 	Result<Table, RC> query(
 		int nColumns, RelAttr** columns,        /* []*RelAttr  columns */

@@ -22,6 +22,14 @@ select * from SYSCOLUMN;
 
 select sname from student;
 select sname,sno from student;
+select sname,sno,tno,tname from student,teacher;
+
+select * from student where student.sname="lucy";
+select * from student where student.sage=22;
+
+select sname, tname from student, teacher where student.sgender = teacher.tgender;
+select sname, tname, wname from student, teacher, worker;
+select * from student where sname="lucy";
 
 /* TODO */
 
