@@ -359,6 +359,85 @@ Result<bool, RC> Table::select(Table& dest, int n_con, Condition* conditions)
 	return Result<bool, RC>::Ok(true);
 }
 
+Result<bool, RC> Table::update_match(
+	char* const column, Value* v,
+	int n, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		auto find_column = this->get_column(column);
+		if (!find_column.ok) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(find_column.err);
+		}
+		auto const& col = find_column.result;
+		if (v->type != col->attrtype) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		memcpy(rec.pData + col->attroffset, v->data, col->attrlength);
+		RC update_res = UpdateRec(&this->file, &rec);
+		if (update_res != SUCCESS) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(update_res);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::remove_match(int n, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		RC delete_res = DeleteRec(&this->file, &rec.rid);
+		if (delete_res != SUCCESS) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(delete_res);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
 Result<bool, RC> Table::turn_to_con(Condition* cond, Con* con)
 {
 	con->bLhsIsAttr = cond->bLhsIsAttr;
@@ -366,9 +445,14 @@ Result<bool, RC> Table::turn_to_con(Condition* cond, Con* con)
 	con->compOp = cond->op;
 	char full_name[PATH_SIZE];
 	if (cond->bLhsIsAttr) {
-		strcpy(full_name, cond->lhsAttr.relName);
-		strcat(full_name, ".");
-		strcat(full_name, cond->lhsAttr.attrName);
+		if (cond->lhsAttr.relName) {
+			strcpy(full_name, cond->lhsAttr.relName);
+			strcat(full_name, ".");
+			strcat(full_name, cond->lhsAttr.attrName);
+		}
+		else {
+			strcpy(full_name, cond->lhsAttr.attrName);
+		}
 		auto res = this->get_column(full_name);
 		if (!res.ok) {
 			return Result<bool, RC>::Err(FLIED_NOT_EXIST);
@@ -385,9 +469,14 @@ Result<bool, RC> Table::turn_to_con(Condition* cond, Con* con)
 	}
 
 	if (cond->bRhsIsAttr) {
-		strcpy(full_name, cond->rhsAttr.relName);
-		strcat(full_name, ".");
-		strcat(full_name, cond->rhsAttr.attrName);
+		if (cond->rhsAttr.relName) {
+			strcpy(full_name, cond->rhsAttr.relName);
+			strcat(full_name, ".");
+			strcat(full_name, cond->rhsAttr.attrName);
+		}
+		else {
+			strcpy(full_name, cond->rhsAttr.attrName);
+		}
 		auto res = this->get_column(full_name);
 		if (!res.ok) {
 			return Result<bool, RC>::Err(FLIED_NOT_EXIST);

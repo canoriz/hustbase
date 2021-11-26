@@ -28,6 +28,8 @@ RC execute(char* sql) {
 		dropIndex* drop_index = &(processing_sql->sstr.dri);
 		inserts* insert = &(processing_sql->sstr.ins);
 		selects* select = &(processing_sql->sstr.sel);
+		updates* update = &(processing_sql->sstr.upd);
+		deletes* del = &(processing_sql->sstr.del);
 		switch (processing_sql->flag) {
 		case 1:
 			//判断SQL语句为select语句
@@ -40,10 +42,15 @@ RC execute(char* sql) {
 
 		case 3:
 			//判断SQL语句为update语句
+			return Update(
+				update->relName, update->attrName, &update->value,
+				update->nConditions, update->conditions
+			);
 			break;
 
 		case 4:
 			//判断SQL语句为delete语句
+			return Delete(del->relName, del->nConditions, del->conditions);
 			break;
 
 		case 5:
@@ -181,8 +188,19 @@ RC Insert(char* relName, int nValues, Value* values) {
 	return res.err;
 }
 RC Delete(char* relName, int nConditions, Condition* conditions) {
-	return FAIL;
+	auto res = working_db.delete_record(relName, nConditions, conditions);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
 RC Update(char* relName, char* attrName, Value* value, int nConditions, Condition* conditions) {
-	return FAIL;
+	auto res = working_db.update_record(
+		relName, attrName, value,
+		nConditions, conditions
+	);
+	if (res.ok) {
+		return SUCCESS;
+	}
+	return res.err;
 }
