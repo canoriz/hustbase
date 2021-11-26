@@ -342,25 +342,234 @@ Result<Index, RC> DataBase::open_index(char* const index_name) {
 	return Result<Index, RC>::Err(res.err);
 }
 
-Result<Table, RC> DataBase::select(
+Result<bool, RC> DataBase::table_product(
+		char* const t1,
+		char* const t2,
+		char* const dest)
+{
+	/* t1 x t2 -> dest */
+	auto r1 = this->open_table(t1);
+	auto r2 = this->open_table(t2);
+	if (!(r1.ok && r2.ok)) {
+		return Result<bool, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	Table& tbl1 = r1.result, tbl2 = r2.result;
+
+	// create table dest
+	// first, init paramaters
+	int dest_attr_count = tbl1.meta.table.attrcount + tbl2.meta.table.attrcount;
+	AttrInfo* dest_attr_arr = (AttrInfo*)malloc(sizeof(AttrInfo) * dest_attr_count);
+	int attr_i = 0;
+	for (auto const& c : tbl1.meta.columns) {
+		dest_attr_arr[attr_i].attrLength = c.attrlength;
+		dest_attr_arr[attr_i].attrName = (char*)malloc(
+			sizeof(char) * (
+				strlen(tbl1.name) + strlen(c.attrname) + 2
+				)
+		);
+		strcpy(dest_attr_arr[attr_i].attrName, c.attrname);
+		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+		attr_i++;
+	}
+	for (auto const& c : tbl2.meta.columns) {
+		dest_attr_arr[attr_i].attrLength = c.attrlength;
+		dest_attr_arr[attr_i].attrName = (char*)malloc(
+			sizeof(char) * (
+				strlen(tbl2.name) + strlen(c.attrname) + 2
+				)
+		);
+		strcpy(dest_attr_arr[attr_i].attrName, tbl2.name);
+		strcat(dest_attr_arr[attr_i].attrName, ".");
+		strcat(dest_attr_arr[attr_i].attrName, c.attrname);
+		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+		attr_i++;
+	}
+
+	// then, create dest table
+	auto add_t = this->add_table(dest, dest_attr_count, dest_attr_arr);
+	free(dest_attr_arr);
+	if (!add_t.ok) {
+		return Result<bool, RC>::Err(add_t.err);
+	}
+	auto dest_t = this->open_table(dest);
+	if (!dest_t.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(dest_t.err);
+	}
+
+	auto prod_res = tbl1.product(tbl2, dest_t.result);
+	if (!prod_res.ok) {
+		return Result<bool, RC>::Err(prod_res.err);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> DataBase::delete_record(
+		char* const table_name, int n, Condition* conditions
+) {
+	auto t_open = this->open_table(table_name);
+	if (!t_open.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(t_open.err);
+	}
+	return t_open.result.remove_match(n, conditions);
+}
+
+Result<bool, RC> DataBase::update_record(
+		char* const table_name, char* const column_name,
+		Value* v, int n, Condition* conditions
+) {
+	auto t_open = this->open_table(table_name);
+	if (!t_open.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(t_open.err);
+	}
+	return t_open.result.update_match(column_name, v, n, conditions);
+}
+
+Result<bool, RC> DataBase::table_project(
+	char* const t, char* const dest,
+	int n, RelAttr** columns)
+{
+	auto r_from = this->open_table(t);
+	if (!r_from.ok) {
+		return Result<bool, RC>::Err(r_from.err);
+	}
+	Table& tbl = r_from.result;
+
+	// create table dest
+	// first, init paramaters
+	// match every column
+	AttrInfo* dest_attr_arr = (AttrInfo*)malloc(sizeof(AttrInfo) * tbl.meta.table.attrcount);
+	int attr_i = 0;
+	for (auto j = 0; j < n; j++) {
+		char col_with_dot[PATH_SIZE];
+		strcpy(col_with_dot, columns[j]->relName);
+		strcat(col_with_dot, ".");
+		strcat(col_with_dot, columns[j]->attrName);
+
+		bool match = false;
+		for (auto const& c : tbl.meta.columns) {
+			const int SAME = 0;
+			if (strcmp(col_with_dot, c.attrname) == SAME) {
+				dest_attr_arr[attr_i].attrLength = c.attrlength;
+				dest_attr_arr[attr_i].attrName = (char*)malloc(
+					sizeof(char) * (strlen(c.attrname) + 2)
+				);
+				strcpy(dest_attr_arr[attr_i].attrName, c.attrname);
+				dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+				attr_i++;
+				match = true;
+			}
+		}
+		if (!match) {
+			return Result<bool, RC>::Err(FAIL);
+		}
+	}
+
+	// then, create dest table
+	auto add_t = this->add_table(dest, attr_i, dest_attr_arr);
+	free(dest_attr_arr);
+	if (!add_t.ok) {
+		return Result<bool, RC>::Err(add_t.err);
+	}
+	auto dest_t = this->open_table(dest);
+	if (!dest_t.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(dest_t.err);
+	}
+
+	auto proj_res = tbl.project(dest_t.result);
+	if (!proj_res.ok) {
+		return Result<bool, RC>::Err(proj_res.err);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> DataBase::table_select(
+		char* const t, char* const dest,
+		int n, Condition* conditions
+)
+{
+	auto r_from = this->open_table(t);
+	if (!r_from.ok) {
+		return Result<bool, RC>::Err(r_from.err);
+	}
+	Table& tbl = r_from.result;
+
+	// create table dest
+	// first, init paramaters
+	AttrInfo* dest_attr_arr = (AttrInfo*)malloc(sizeof(AttrInfo) * tbl.meta.table.attrcount);
+	int attr_i = 0;
+	for (auto const& c : tbl.meta.columns) {
+		dest_attr_arr[attr_i].attrLength = c.attrlength;
+		dest_attr_arr[attr_i].attrName = (char*)malloc(
+			sizeof(char) * strlen(tbl.name)
+		);
+		strcpy(dest_attr_arr[attr_i].attrName, c.attrname);
+		dest_attr_arr[attr_i].attrType = (AttrType)c.attrtype;
+		attr_i++;
+	}
+
+	// then, create dest table
+	auto add_t = this->add_table(dest, attr_i, dest_attr_arr);
+	free(dest_attr_arr);
+	if (!add_t.ok) {
+		return Result<bool, RC>::Err(add_t.err);
+	}
+	auto dest_t = this->open_table(dest);
+	if (!dest_t.ok) {
+		// open destination failed
+		return Result<bool, RC>::Err(dest_t.err);
+	}
+
+	auto sele_res = tbl.select(dest_t.result, n, conditions);
+	if (!sele_res.ok) {
+		return Result<bool, RC>::Err(sele_res.err);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> DataBase::make_unit_table(char* const table_name)
+{
+	auto mk_unit = this->add_table(table_name, 0, NULL);
+	if (!mk_unit.ok) {
+		return Result<bool, RC>::Err(mk_unit.err);
+	}
+	auto unit_t_open = this->open_table(table_name);
+	if (!unit_t_open.ok) {
+		return Result<bool, RC>::Err(unit_t_open.err);
+	}
+	auto& unit_t = unit_t_open.result;
+	auto insert_none = unit_t.insert_record("");
+	if (!insert_none.ok) {
+		return Result<bool, RC>::Err(insert_none.err);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<Table, RC> DataBase::query(
 		int n_columns, RelAttr** columns,
 		int n_tables, char** tables, int n_conditions,
 		Condition* conditions, SelResult* res)
 {
 	const int SAME = 0;
-	bool select_all_columns = false;
-	if (n_columns <= 0 || n_tables <= 0 || n_tables > 1) {
+	bool query_all_columns = false;
+	if (n_columns <= 0 || n_tables <= 0) {
 		return Result<Table, RC>::Err(FAIL);
 	}
+
+	// make columns
 	for (auto i = 0; i < n_columns; i++) {
 		RelAttr* col_ptr = columns[i];
 		if (strcmp(col_ptr->attrName, "*") == SAME) {
 			// select * from ???
-			select_all_columns = true;
+			query_all_columns = true;
 			break;
 		}
-		else if (strlen(col_ptr->relName) == 0) {
-			// table name missing
+		else if (col_ptr->relName == NULL) {
+			// table name missing, get it!
 			for (auto j = 0; j < n_tables; j++) {
 				char* table_name = tables[j];
 
@@ -371,65 +580,196 @@ Result<Table, RC> DataBase::select(
 				}
 
 				Table tmp_table = res.result;
-				if (tmp_table.get_column(col_ptr->relName).ok) {
+				if (tmp_table.get_column(col_ptr->attrName).ok) {
 					// found correspodent table of col_ptr->attrName
 					// make up it in RelAttr struct
+					col_ptr->relName = (char*)malloc(
+						sizeof(char) * (1 + strlen(tmp_table.name))
+					);
 					strcpy(col_ptr->relName, tmp_table.name);
 					break;
 				}
 			}
 
-			if (strlen(col_ptr->relName) == 0) {
+			if (col_ptr->relName == NULL) {
+				// FLIED£¿ FIELD£¡
 				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
 			}
 		}
 	}
-	
-	if (select_all_columns) {
-		res->row_num = 0;
-		res->col_num = 0;
-		for (auto j = 0; j < n_tables; j++) {
-			// actually n_tables = 1
-			char* table_name = tables[j];
 
-			auto open_res = this->open_table(table_name);
-			if (!open_res.ok) {
-				// can not open such table
-				return Result<Table, RC>::Err(TABLE_NOT_EXIST);
-			}
+	for (auto i = 0; i < n_conditions; i++) {
+		Condition* cond_ptr = &conditions[i];
+		if (cond_ptr->bLhsIsAttr && cond_ptr->lhsAttr.relName == NULL) {
+			// table name missing, get it!
+			for (auto j = 0; j < n_tables; j++) {
+				char* table_name = tables[j];
 
-			Table tmp_table = open_res.result;
-			RM_FileScan file_scan;
-			RM_Record rec;
-			tmp_table.scan_open(&file_scan, 0, NULL);
-			auto scan_res = tmp_table.scan_next(&file_scan, &rec);
-
-			// initiate column titles
-			int initiating_col_n = 0;
-			for (auto const& c : tmp_table.meta.columns) {
-				res->type[initiating_col_n] = (AttrType)c.attrtype;
-				res->length[initiating_col_n] = c.attrlength;
-				strcpy(res->fields[initiating_col_n], c.attrname);
-				initiating_col_n++;
-			}
-
-			while (scan_res.ok && scan_res.result) {
-				res->col_num = 0;
-				res->res[res->row_num] = (char**)malloc(sizeof(char*) * tmp_table.meta.columns.size());
-				for (auto const& c : tmp_table.meta.columns) {
-					res->res[res->row_num][res->col_num] = (char*)malloc(c.attrlength);
-					memcpy(
-						res->res[res->row_num][res->col_num],
-						rec.pData + c.attroffset, c.attrlength
-					);
-					res->col_num++;
+				auto res = this->open_table(table_name);
+				if (!res.ok) {
+					// can not open such table
+					return Result<Table, RC>::Err(TABLE_NOT_EXIST);
 				}
-				res->row_num++;
-				scan_res = tmp_table.scan_next(&file_scan, &rec);
+
+				Table tmp_table = res.result;
+				if (tmp_table.get_column(cond_ptr->lhsAttr.attrName).ok) {
+					// found correspodent table of col_ptr->attrName
+					// make up it in RelAttr struct
+					cond_ptr->lhsAttr.relName = (char*)malloc(
+						sizeof(char) * (1 + strlen(tmp_table.name))
+					);
+					strcpy(cond_ptr->lhsAttr.relName, tmp_table.name);
+					break;
+				}
+			}
+
+			if (cond_ptr->lhsAttr.relName == NULL) {
+				// FLIED£¿ FIELD£¡
+				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
 			}
 		}
-		// TODO: make table
-		return Result<Table, RC>::Ok(Table());
+		if (cond_ptr->bRhsIsAttr && cond_ptr->rhsAttr.relName == NULL) {
+			// table name missing, get it!
+			for (auto j = 0; j < n_tables; j++) {
+				char* table_name = tables[j];
+
+				auto res = this->open_table(table_name);
+				if (!res.ok) {
+					// can not open such table
+					return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+				}
+
+				Table tmp_table = res.result;
+				if (tmp_table.get_column(cond_ptr->rhsAttr.attrName).ok) {
+					// found correspodent table of col_ptr->attrName
+					// make up it in RelAttr struct
+					cond_ptr->rhsAttr.relName = (char*)malloc(
+						sizeof(char) * (1 + strlen(tmp_table.name))
+					);
+					strcpy(cond_ptr->rhsAttr.relName, tmp_table.name);
+					break;
+				}
+			}
+
+			if (cond_ptr->rhsAttr.relName == NULL) {
+				// FLIED£¿ FIELD£¡
+				return Result<Table, RC>::Err(FLIED_NOT_EXIST);
+			}
+		}
 	}
-	return Result<Table, RC>();
+
+	/* unit table reserved-unit:
+	   for any t,
+	   cartesian_product(u, t) = t
+	   cartesian_product(t, u) = t */
+	char* t1 = NULL;
+	char* t2 = NULL;
+	char* dest = this->get_a_tmp_table();
+	if (!this->make_unit_table(dest).ok ||
+		!this->open_table(dest).ok) {
+		this->drop_table(dest);
+		return Result<Table, RC>::Err(FAIL);
+	}
+
+	// make product
+	for (auto i = 0; i < n_tables; i++) {
+		t1 = dest;
+		t2 = tables[i];
+		dest = get_a_tmp_table();
+		auto mk_prod = this->table_product(t1, t2, dest);
+		if (!mk_prod.ok) {
+			this->release_all_tmp_tables();
+			return Result<Table, RC>::Err(mk_prod.err);
+		}
+	}
+
+	t1 = dest;
+	dest = get_a_tmp_table();
+	auto sele_res = this->table_select(t1, dest, n_conditions, conditions);
+	if (!sele_res.ok) {
+		this->release_all_tmp_tables();
+		return Result<Table, RC>::Err(sele_res.err);
+	}
+	
+	if (!query_all_columns) {
+		// get specific columns
+		t1 = dest;
+		dest = this->get_a_tmp_table();
+
+		auto proj_res = this->table_project(t1, dest, n_columns, columns);
+		if (!proj_res.ok) {
+			this->release_all_tmp_tables();
+			return Result<Table, RC>::Err(proj_res.err);
+		}
+	}
+
+	auto open_res = this->open_table(dest);
+	if (!open_res.ok) {
+		// can not open such table
+		this->release_all_tmp_tables();
+		return Result<Table, RC>::Err(TABLE_NOT_EXIST);
+	}
+
+	Table tmp_table = open_res.result;
+	tmp_table.make_select_result(res);
+	// TODO: make table
+	this->release_all_tmp_tables();
+	return Result<Table, RC>::Ok(Table());
+}
+
+char* const DataBase::get_a_tmp_table()
+{
+	// maximum 16 predefined middle results
+	static const char tmp_tables[16][16] = {
+			"reserved-tmp0",
+			"reserved-tmp1",
+			"reserved-tmp2",
+			"reserved-tmp3",
+			"reserved-tmp4",
+			"reserved-tmp5",
+			"reserved-tmp6",
+			"reserved-tmp7",
+
+			"reserved-tmp8",
+			"reserved-tmp9",
+			"reserved-tmpa",
+			"reserved-tmpb",
+			"reserved-tmpc",
+			"reserved-tmpd",
+			"reserved-tmpe",
+			"reserved-tmpf"
+	};
+	char* const out_table = (char*)tmp_tables[this->next_tmp_table];
+	this->next_tmp_table++;
+	return out_table;
+}
+
+bool DataBase::release_all_tmp_tables()
+{
+	// maximum 16 predefined middle results
+	static const char tmp_tables[16][16] = {
+			"reserved-tmp0",
+			"reserved-tmp1",
+			"reserved-tmp2",
+			"reserved-tmp3",
+			"reserved-tmp4",
+			"reserved-tmp5",
+			"reserved-tmp6",
+			"reserved-tmp7",
+
+			"reserved-tmp8",
+			"reserved-tmp9",
+			"reserved-tmpa",
+			"reserved-tmpb",
+			"reserved-tmpc",
+			"reserved-tmpd",
+			"reserved-tmpe",
+			"reserved-tmpf"
+	};
+	bool all_released = true;
+	for (int i = 0; i < this->next_tmp_table; i++) {
+		all_released = all_released & this->drop_table((char*)tmp_tables[i]).ok;
+	}
+	this->next_tmp_table = 0;
+	return all_released;
 }

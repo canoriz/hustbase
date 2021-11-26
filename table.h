@@ -10,6 +10,7 @@
 #include "result.h"
 #include "metadata.h"
 #include "RM_Manager.h"
+#include "QU_Manager.h"
 
 
 class Table {
@@ -22,6 +23,7 @@ public:
 public:
 	Table() :name("") {}
 	static Result<bool, RC>  create(char* path, char* name, int count, AttrInfo* attrs);
+	static Result<bool, RC>  create_prod_unit(char* path, char* name);
 	static Result<Table, RC> open(char* path, char* name);
 
 public:
@@ -35,6 +37,21 @@ public:
 	Result<bool, RC> scan_open(RM_FileScan* file_scan, int n_con, Con* conditions);
 	Result<bool, RC> scan_next(RM_FileScan* file_scan, RM_Record* rec);
 	Result<bool, RC> scan_close(RM_FileScan* file_scan);
+	bool make_select_result(SelResult* res);
+	int blk_size();
+
+	Result<bool, RC> product(Table& b, Table& dest_table);
+	Result<bool, RC> project(Table& dest);
+	Result<bool, RC> select(Table& dest, int n_con, Condition* conditions);
+
+	Result<bool, RC> update_match(
+		char* column, Value* v,
+		int  n, Condition* conditions
+	);
+	Result<bool, RC> remove_match(int n, Condition* conditions);
+
+private:
+	Result<bool, RC> turn_to_con(Condition* cond, Con* con);
 };
 
 

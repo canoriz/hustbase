@@ -63,6 +63,11 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	return Result<bool, RC>(true);
 }
 
+Result<bool, RC> Table::create_prod_unit(char* path, char* name)
+{
+	return Table::create(path, name, 0, NULL);
+}
+
 Result<Table, RC> Table::open(char* path, char* name) {
 	char full_path[PATH_SIZE] = "";
 	// metadata path
@@ -192,6 +197,302 @@ Result<bool, RC> Table::scan_close(RM_FileScan* file_scan)
 	RC closed = CloseScan(file_scan);
 	if (closed != SUCCESS) {
 		return Result<bool, RC>::Err(closed);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+bool Table::make_select_result(SelResult* res)
+{
+	// ugly, stupid and complex
+	RM_FileScan file_scan;
+	RM_Record rec;
+	this->scan_open(&file_scan, 0, NULL);
+	auto scan_res = this->scan_next(&file_scan, &rec);
+
+	// initiate column titles
+	int initiating_col_n = 0;
+	for (auto const& c : this->meta.columns) {
+		res->type[initiating_col_n] = (AttrType)c.attrtype;
+		res->length[initiating_col_n] = c.attrlength;
+		strcpy(res->fields[initiating_col_n], c.attrname);
+		initiating_col_n++;
+	}
+
+	while (scan_res.ok && scan_res.result) {
+		// TODO 100+ make list
+		res->col_num = 0;
+		res->res[res->row_num] = (char**)malloc(sizeof(char*) * this->meta.columns.size());
+		for (auto const& c : this->meta.columns) {
+			res->res[res->row_num][res->col_num] = (char*)malloc(c.attrlength);
+			memcpy(
+				res->res[res->row_num][res->col_num],
+				rec.pData + c.attroffset, c.attrlength
+			);
+			res->col_num++;
+		}
+		res->row_num++;
+		scan_res = this->scan_next(&file_scan, &rec);
+	}
+	this->scan_close(&file_scan);
+	return true;
+}
+
+int Table::blk_size()
+{
+	// one record's size (in bytes)
+	return this->meta.table.size;
+}
+
+Result<bool, RC> Table::product(Table& b, Table& dest_table)
+{
+	/* make cartesian product */
+
+	// now, make product
+	int blk_sz = this->blk_size() + b.blk_size();
+	RM_FileScan scan_a;
+	RM_Record rec_a;
+	auto scan_a_open = this->scan_open(&scan_a, 0, NULL);
+	if (!scan_a_open.ok) {
+		// scan this failed
+		return Result<bool, RC>::Err(scan_a_open.err);
+	}
+
+	char* buf = (char*)malloc(sizeof(char) * blk_sz);
+	auto scan_a_res = this->scan_next(&scan_a, &rec_a);
+	while (scan_a_res.ok && scan_a_res.result) {
+		RM_FileScan scan_b;
+		RM_Record rec_b;
+		auto scan_b_open = b.scan_open(&scan_b, 0, NULL);
+		if (!scan_b_open.ok) {
+			// scan B failed
+			return Result<bool, RC>::Err(scan_b_open.err);
+		}
+		auto scan_b_res = b.scan_next(&scan_b, &rec_b);
+
+		while (scan_b_res.ok && scan_b_res.result) {
+			memcpy(buf, rec_a.pData, this->blk_size());
+			memcpy(buf + this->blk_size(), rec_b.pData, b.blk_size());
+			auto insert_rec = dest_table.insert_record(buf);
+			if (!insert_rec.ok) {
+				return Result<bool, RC>::Err(insert_rec.err);
+			}
+			scan_b_res = b.scan_next(&scan_b, &rec_b);
+		}
+		b.scan_close(&scan_b);
+		scan_a_res = this->scan_next(&scan_a, &rec_a);
+	}
+	free(buf);
+	this->scan_close(&scan_a);
+
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::project(Table& dest)
+{
+	/* make projection */
+
+	int blk_sz = dest.blk_size();
+	RM_FileScan scan;
+	RM_Record rec;
+	auto scan_opened = this->scan_open(&scan, 0, NULL);
+	if (!scan_opened.ok) {
+		// scan open failed
+		return Result<bool, RC>::Err(scan_opened.err);
+	}
+
+	char* buf = (char*)malloc(sizeof(char) * blk_sz);
+	auto scan_res = this->scan_next(&scan, &rec);
+	while (scan_res.ok && scan_res.result) {
+		for (auto const& c : dest.meta.columns) {
+			auto from_column_res = this->get_column((char*)c.attrname);
+			if (!from_column_res.ok) {
+				return Result<bool, RC>::Err(FLIED_NOT_EXIST);
+			}
+			auto from_column = from_column_res.result;
+			memcpy(
+				buf + c.attroffset,
+				rec.pData + from_column->attroffset,
+				from_column->attrlength
+			);
+		}
+
+		auto insert_rec = dest.insert_record(buf);
+		if (!insert_rec.ok) {
+			return Result<bool, RC>::Err(insert_rec.err);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	free(buf);
+	this->scan_close(&scan);
+
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::select(Table& dest, int n_con, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n_con);
+	for (int i = 0; i < n_con; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if(!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n_con, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		auto insert_rec = dest.insert_record(rec.pData);
+		if (!insert_rec.ok) {
+			free(cons);
+			return Result<bool, RC>::Err(insert_rec.err);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::update_match(
+	char* const column, Value* v,
+	int n, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		auto find_column = this->get_column(column);
+		if (!find_column.ok) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(find_column.err);
+		}
+		auto const& col = find_column.result;
+		if (v->type != col->attrtype) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		memcpy(rec.pData + col->attroffset, v->data, col->attrlength);
+		RC update_res = UpdateRec(&this->file, &rec);
+		if (update_res != SUCCESS) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(update_res);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::remove_match(int n, Condition* conditions)
+{
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = this->turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	this->scan_open(&scan, n, cons);
+	auto scan_res = this->scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		RC delete_res = DeleteRec(&this->file, &rec.rid);
+		if (delete_res != SUCCESS) {
+			free(cons);
+			this->scan_close(&scan);
+			return Result<bool, RC>::Err(delete_res);
+		}
+		scan_res = this->scan_next(&scan, &rec);
+	}
+	this->scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::turn_to_con(Condition* cond, Con* con)
+{
+	con->bLhsIsAttr = cond->bLhsIsAttr;
+	con->bRhsIsAttr = cond->bRhsIsAttr;
+	con->compOp = cond->op;
+	char full_name[PATH_SIZE];
+	if (cond->bLhsIsAttr) {
+		if (cond->lhsAttr.relName) {
+			strcpy(full_name, cond->lhsAttr.relName);
+			strcat(full_name, ".");
+			strcat(full_name, cond->lhsAttr.attrName);
+		}
+		else {
+			strcpy(full_name, cond->lhsAttr.attrName);
+		}
+		auto res = this->get_column(full_name);
+		if (!res.ok) {
+			return Result<bool, RC>::Err(FLIED_NOT_EXIST);
+		}
+		auto const& col = res.result;
+		con->attrType    = (AttrType)col->attrtype;
+		con->LattrLength = col->attrlength;
+		con->LattrOffset = col->attroffset;
+
+	}
+	else {
+		con->Lvalue   = cond->lhsValue.data;
+		con->attrType = cond->lhsValue.type;
+	}
+
+	if (cond->bRhsIsAttr) {
+		if (cond->rhsAttr.relName) {
+			strcpy(full_name, cond->rhsAttr.relName);
+			strcat(full_name, ".");
+			strcat(full_name, cond->rhsAttr.attrName);
+		}
+		else {
+			strcpy(full_name, cond->rhsAttr.attrName);
+		}
+		auto res = this->get_column(full_name);
+		if (!res.ok) {
+			return Result<bool, RC>::Err(FLIED_NOT_EXIST);
+		}
+		auto const& col = res.result;
+		if ((AttrType)col->attrtype != con->attrType) {
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		con->RattrLength = col->attrlength;
+		con->RattrOffset = col->attroffset;
+	}
+	else {
+		if (cond->rhsValue.type != con->attrType) {
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		con->Rvalue = cond->rhsValue.data;
 	}
 	return Result<bool, RC>::Ok(true);
 }

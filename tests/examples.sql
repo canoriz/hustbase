@@ -20,7 +20,22 @@ select * from student, teacher, worker;
 select * from SYSTABLE;
 select * from SYSCOLUMN;
 
-/* TODO */
 select sname from student;
+select sname,sno from student;
+select sname,sno,tno,tname from student,teacher;
+
+select * from student where student.sname="lucy";
+select * from student where student.sage=22;
+
+select sname, tname from student, teacher where student.sgender = teacher.tgender;
+select sname, tname, wname from student, teacher, worker;
+select * from student where sname="lucy";
+
+update student set sage=25 where sname="lucy";
+delete from sss where sname="lucy";
+
+/* TODO */
+
 select * from student, teachers where student.sage=teachers.id and sname="asdf";
-update student set sage=22 where sname=lucy;
+update student set sage=25 where sname="lucy";
+update sss set sage=25 where sname="lucy";

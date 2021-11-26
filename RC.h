@@ -74,7 +74,8 @@ typedef enum{
 	ILLEGAL_INDEX_TREE,		//索引树与预期不一致
 	
 	/*如需新增错误码，请从下一行开始添加，不要在前面插入，以免AutoTest程序判断错误。*/
-	RM_EOF					//没有发现满足扫描条件的记录
+	RM_EOF,					//没有发现满足扫描条件的记录
+	TYPE_NOT_MATCH          //比较符两边参数类型不一致
 }RC;
 
 #endif

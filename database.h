@@ -13,6 +13,7 @@ class DataBase {
 private:
 	char sysroot[PATH_SIZE];
 	bool opened;
+	int  next_tmp_table;
 
 	std::vector<Table> opened_tables;
 	std::vector<Index> opened_indices;
@@ -26,6 +27,7 @@ public:
 	DataBase(const char* const dbpath = "") {
 		strcpy(this->sysroot, dbpath);
 		this->opened = false;
+		this->next_tmp_table = 0;
 	}
 	char* const name();
 	bool in_use();
@@ -40,11 +42,23 @@ public:
 	Result<bool, RC> insert(char* const table, const int n, Value* const vals);
 	Result<Table, RC> open_table(char* const table_name);
 	Result<Index, RC> open_index(char* const index_name);
-	Result<Table, RC> select(
+	Result<bool, RC> update_record(
+		char* const table_name, char* const column_name, Value* v,
+		int n, Condition* conditions
+	);
+	Result<bool, RC> delete_record(char* const table_name, int n, Condition* conditions);
+	Result<bool, RC> table_product(char* const t1, char* const t2, char* const dest);
+	Result<bool, RC> table_project(char* const t, char* const dest, int n, RelAttr** columns);
+	Result<bool, RC> table_select(char* const t, char* const dest, int n, Condition* conditions);
+	Result<bool, RC> make_unit_table(char* const table_name);
+	Result<Table, RC> query(
 		int nColumns, RelAttr** columns,        /* []*RelAttr  columns */
 		int nTables, char** tables,             /* *(*char)(*TYPE) tables */
 		int nConditions, Condition* conditions, /* []Condition conditions */
 		SelResult* res);
+
+	char* const get_a_tmp_table();
+	bool release_all_tmp_tables();
 
 public:
 	static Result<DataBase, RC> open(const char* const db_root);
