@@ -764,6 +764,8 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 	//删除索引项
 	memmove(ixNode->keys + ridIx * indexinfo.attrLength, ixNode->keys + (ridIx + 1) * indexinfo.attrLength, (ixNode->keynum - ridIx) * indexinfo.attrLength);
 	memset(ixNode->keys + ixNode->keynum * indexinfo.attrLength, 0, (order - ixNode->keynum) * indexinfo.attrLength);
+
+
 	//删除指针项，需要区分叶子节点和非叶子节点两种情况
 	if (ixNode->is_leaf) {
 		memmove(ixNode->rids + ridIx, ixNode->rids + ridIx + 1, ixNode->keynum - ridIx);
@@ -774,7 +776,7 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 		memset(ixNode->rids + ixNode->keynum + 1, 0, (order - ixNode->keynum) * indexinfo.attrLength);
 	}
 	
-
+	//如果当前节点是根节点且分支为一，则子节点成为新根节点
 	if (pn == indexHandle->fileHeader.rootPage && ixNode->keynum == 1) {
 		indexHandle->fileHeader.rootPage = *(PageNum*)ixNode->rids;
 		MarkDirty(&pageHandle);
@@ -914,11 +916,9 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 				}
 			}
 		}
-
 		free(keydata);
-		return SUCCESS;
 	}
-	
+	return SUCCESS;
 }
 
 
