@@ -916,6 +916,12 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 				}
 			}
 		}
+		MarkDirty(&fapageHandle);
+		UnpinPage(&fapageHandle);
+		MarkDirty(&bropageHandle);
+		UnpinPage(&bropageHandle);
+		MarkDirty(&pageHandle);
+		UnpinPage(&pageHandle);
 		free(keydata);
 	}
 	return SUCCESS;
