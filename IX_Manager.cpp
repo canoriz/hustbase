@@ -16,7 +16,7 @@ int CmpValue(AttrType attrType, char* keyval, char* value);
 RC FindFirstIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* pageHandle);
 
 //根据属性值和RID的值精确查找索引项可能在的页面，返回页面句柄和具体位置
-RC FindIXNode(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval, PF_PageHandle* pageHandle);
+RC FindIXNodeInRid(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval, PF_PageHandle* pageHandle);
 
 //根据属性值和页号插入内容到具体的叶子节点中
 RC InsertEntryInLeaf(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum pn);
@@ -156,7 +156,7 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 	RC tmp;
 	PF_PageHandle pageHandle;
 
-	tmp = FindIXNode(indexHandle, (char*)pData, rid, &pageHandle);
+	tmp = FindIXNodeInRid(indexHandle, (char*)pData, rid, &pageHandle);
 	if (tmp != SUCCESS) {
 		return IX_NOMEM;
 	}
