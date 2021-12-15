@@ -94,18 +94,16 @@ RC OpenIndex(const char* fileName, IX_IndexHandle* indexHandle)
 	}
 
 	//获取索引控制信息
-	PF_PageHandle* pageHandle = (PF_PageHandle*)malloc(sizeof(PF_PageHandle));
-	if ((tmp = GetThisPage(fileID, 0, pageHandle)) != SUCCESS) {
+	PF_PageHandle pageHandle;
+	if ((tmp = GetThisPage(fileID, 1, &pageHandle)) != SUCCESS) {
 		return tmp;
 	}
 
 	indexHandle->bOpen = true;
 	indexHandle->fileID = fileID;
-	indexHandle->fileHeader = *(IX_FileHeader*)pageHandle->pFrame->page.pData;
+	indexHandle->fileHeader = *(IX_FileHeader*)pageHandle.pFrame->page.pData;
 
-	UnpinPage(pageHandle);
-
-	free(pageHandle);
+	UnpinPage(&pageHandle);
 
 	return RC();
 }
@@ -136,7 +134,10 @@ RC InsertEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid)
 	int order = indexHandle->fileHeader.order;
 	PF_PageHandle pageHandle;
 
-	FindFirstIXNode(indexHandle, (char*)pData, &pageHandle);
+	tmp = FindFirstIXNode(indexHandle, (char*)pData, &pageHandle);
+	if (tmp != SUCCESS) {
+		return tmp;
+	}
 
 	int pn = pageHandle.pFrame->page.pageNum;
 
@@ -184,23 +185,45 @@ RC OpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, CompOp co
 	if (tmp != SUCCESS) return tmp;
 
 	IX_Node* ixNode = getIXNodefromPH(&pageHandle);
+	//空树直接返回
+	if (ixNode->keynum == 0) {
+		return IX_NOMEM;
+	}
+
 	pn = ixNode->brother;
 	IndexInfo indexinfo(indexHandle);
 	char* keyval = (char*)malloc(indexinfo.attrLength);
 
-	int ridIx = 0;
-	switch (indexScan->compOp)
+	int ridIx = 0, first = 0;
+	switch (compOp)
 	{
 	case EQual:
+		while (ridIx < ixNode->keynum) {
+			memmove(keyval, ixNode->keys + ridIx * indexinfo.attrLength, indexinfo.attrLength);
+			int result = CmpValue(indexinfo.attrType, keyval, value);
+			if (result < 0) {
+				ridIx++;
+			}
+			else if (result == 0){
+				break;
+			}
+			else {
+				return IX_NOMEM;
+			}
+		}
+
+		if (ridIx == ixNode->keynum) {
+			return IX_NOMEM;
+		}
 		break;
 	case LEqual:
-		pn = indexHandle->fileHeader.first_leaf;
+		first = 1;
 		break;
 	case NEqual:
 		return FAIL;
 		break;
 	case LessT:
-		pn = indexHandle->fileHeader.first_leaf;
+		first = 1;
 		break;
 	case GEqual:
 		while (ridIx < ixNode->keynum) {
@@ -213,12 +236,16 @@ RC OpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, CompOp co
 				break;
 			}
 		}
+
+		if (ridIx == ixNode->keynum) {
+			return IX_NOMEM;
+		}
 		break;
 	case GreatT:
-		while (ridIx < ixNode->keynum) {
+		while (1) {
 			//如果读取到最后一个叶子节点的最后一个索引项，就返回EOF
 			if (ridIx == ixNode->keynum && ixNode->brother == 0) {
-				return FAIL;
+				return IX_EOF;
 			}
 
 			//如果读到该节点最后一个索引项，就切换到下一页面
@@ -242,10 +269,19 @@ RC OpenIndexScan(IX_IndexScan* indexScan, IX_IndexHandle* indexHandle, CompOp co
 		}
 		break;
 	case NO_OP:
-		pn = indexHandle->fileHeader.first_leaf;
+		first = 1;
 		break;
 	default:
 		break;
+	}
+
+	if (first == 1) {
+		UnpinPage(&pageHandle);
+		if ((tmp = GetThisPage(indexHandle->fileID, indexHandle->fileHeader.first_leaf, &pageHandle)) != SUCCESS) {
+			return tmp;
+		}
+		IX_Node* ixNode = getIXNodefromPH(&pageHandle);
+		pn = ixNode->brother;
 	}
 
 	indexScan->bOpen = true;
@@ -395,7 +431,7 @@ RC FindFirstIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* page
 		}
 
 		//获取节点信息，如果是叶子节点可直接返回
-		ixNode = (IX_Node*)(_pageHandle.pFrame->page.pData + sizeof(IX_FileHeader));
+		ixNode = getIXNodefromPH(&_pageHandle);
 		if (ixNode->is_leaf == 1) {
 			break;
 		}
@@ -405,7 +441,7 @@ RC FindFirstIXNode(IX_IndexHandle* indexHandle, char* value, PF_PageHandle* page
 		for (_ridIx = 0; _ridIx < ixNode->keynum; _ridIx++) {
 			memmove(_keyval, ixNode->keys + _ridIx * indexinfo.attrLength, indexinfo.attrLength);
 			result = CmpValue(indexinfo.attrType, _keyval, value);
-			if (result >= 0) {
+			if (result > 0) {
 				break;
 			}
 		}
@@ -439,12 +475,12 @@ RC FindIXNodeInRid(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval,
 		ixNode = getIXNodefromPH(&_pageHandle);
 
 		//读取节点的属性值，与给的的值进行比较，属性值小于给定值就向后移动
-		for (_ridIx = 0; _ridIx < ixNode->keynum && success && fail; _ridIx++) {
+		for (_ridIx = 0; _ridIx < ixNode->keynum && !success && !fail; _ridIx++) {
 			memmove(_keyval, ixNode->keys + _ridIx * indexinfo.attrLength, indexinfo.attrLength);
 			int result1 = CmpValue(indexinfo.attrType, _keyval, keyval);
 			if (result1 == 0) {
-				memmove(&_ridval, ixNode->rids + _ridIx, indexinfo.attrLength);
-				if (memcmp(&_ridval, ridval, indexinfo.attrLength) == 0) {
+				memmove(&_ridval, ixNode->rids + _ridIx, PTR_SIZE);
+				if (memcmp(&_ridval, ridval, PTR_SIZE) == 0) {
 					*pageHandle = _pageHandle;
 					success = 1;
 				}
@@ -457,6 +493,10 @@ RC FindIXNodeInRid(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval,
 			}
 		}
 
+		if (success || fail) {
+			break;
+		}
+
 		//读到最后也没找到就切换下一个叶子节点
 		_pn = ixNode->brother;
 		_ridIx = 0;
@@ -465,6 +505,7 @@ RC FindIXNodeInRid(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval,
 		//如果读取到最后一个叶子节点就直接返回
 		if (_pn == 0) {
 			fail = 1;
+			break;
 		}
 
 		if ((tmp = GetThisPage(indexHandle->fileID, _pn, &_pageHandle)) != SUCCESS) {
@@ -478,6 +519,8 @@ RC FindIXNodeInRid(IX_IndexHandle* indexHandle, char* keyval, const RID* ridval,
 		return FAIL;
 	}
 	*pageHandle = _pageHandle;
+	UnpinPage(&_pageHandle);
+
 	return SUCCESS;
 }
 
@@ -519,7 +562,7 @@ RC InsertEntryInLeaf(IX_IndexHandle* indexHandle, void* pData, const RID* rid, P
 		newixNode->is_leaf = ixNode->is_leaf;
 		newixNode->brother = ixNode->brother;
 		ixNode->brother = newpageHandle.pFrame->page.pageNum;
-		newixNode->parent = pageHandle.pFrame->page.pageNum;
+		newixNode->parent = ixNode->parent;
 		newixNode->keys = newpageHandle.pFrame->page.pData + sizeof(IX_FileHeader) + sizeof(IX_Node);
 		newixNode->rids = (RID*)(newixNode->keys + order * indexinfo.attrLength);
 
@@ -533,7 +576,7 @@ RC InsertEntryInLeaf(IX_IndexHandle* indexHandle, void* pData, const RID* rid, P
 
 		//根据插入节点位置来选择插入在新节点还是旧节点中
 		if (_index <= order / 2) {
-			memmove(ixNode->keys + (_index + 1) * indexinfo.attrLength, ixNode->keys + _index * indexinfo.attrLength, order / 2 * indexinfo.attrLength);
+			memmove(ixNode->keys + (_index + 1) * indexinfo.attrLength, ixNode->keys + _index * indexinfo.attrLength, (order / 2 - _index) * indexinfo.attrLength);
 			memmove(ixNode->keys + _index * indexinfo.attrLength, pData, indexinfo.attrLength);
 			memmove(ixNode->rids + _index + 1, ixNode->rids + _index, order / 2 * PTR_SIZE);
 			memmove(ixNode->rids + _index, rid, PTR_SIZE);
@@ -541,9 +584,9 @@ RC InsertEntryInLeaf(IX_IndexHandle* indexHandle, void* pData, const RID* rid, P
 		}
 		else {
 			_index -= order / 2;
-			memmove(newixNode->keys + (_index + 1) * indexinfo.attrLength, newixNode->keys + _index * indexinfo.attrLength, order / 2 * indexinfo.attrLength);
+			memmove(newixNode->keys + (_index + 1) * indexinfo.attrLength, newixNode->keys + _index * indexinfo.attrLength, ((order + 1) / 2 - _index) * indexinfo.attrLength);
 			memmove(newixNode->keys + _index * indexinfo.attrLength, pData, indexinfo.attrLength);
-			memmove(newixNode->rids + _index + 1, newixNode->rids + _index, order / 2 * PTR_SIZE);
+			memmove(newixNode->rids + _index + 1, newixNode->rids + _index, ((order + 1) / 2 - _index) * PTR_SIZE);
 			memmove(newixNode->rids + _index, rid, PTR_SIZE);
 			newixNode->keynum++;
 		}
@@ -574,8 +617,11 @@ RC InsertEntryInLeaf(IX_IndexHandle* indexHandle, void* pData, const RID* rid, P
 			ixNode->parent = rootpageHandle.pFrame->page.pageNum;
 			newixNode->parent = rootpageHandle.pFrame->page.pageNum;
 			memmove(rootixNode->keys, data, indexinfo.attrLength);
-			memmove(rootixNode->rids, (RID*)&pageNum, PTR_SIZE);
+			memmove(rootixNode->rids, (RID*)&pn, PTR_SIZE);
+			memmove(rootixNode->rids + 1, (RID*)&pageNum, PTR_SIZE);
 			rootixNode->keynum++;
+			MarkDirty(&rootpageHandle);
+			UnpinPage(&rootpageHandle);
 		}
 
 		free(data);
@@ -631,7 +677,7 @@ RC InsertEntryInParent(IX_IndexHandle* indexHandle, void* pData, const RID* rid,
 		newixNode->is_leaf = ixNode->is_leaf;
 		newixNode->brother = ixNode->brother;
 		ixNode->brother = newpageHandle.pFrame->page.pageNum;
-		newixNode->parent = pageHandle.pFrame->page.pageNum;
+		newixNode->parent = ixNode->parent;
 		newixNode->keys = newpageHandle.pFrame->page.pData + sizeof(IX_FileHeader) + sizeof(IX_Node);
 		newixNode->rids = (RID*)(newixNode->keys + order * indexinfo.attrLength);
 
@@ -659,13 +705,13 @@ RC InsertEntryInParent(IX_IndexHandle* indexHandle, void* pData, const RID* rid,
 			memmove(newixNode->keys, ixNode->keys + order / 2 * indexinfo.attrLength, (order + 1) / 2 * indexinfo.attrLength);
 			memset(ixNode->keys + order / 2 * indexinfo.attrLength, 0, (order + 1) / 2 * indexinfo.attrLength);
 			//插入新索引项
-			memmove(ixNode->keys + (_index + 1) * indexinfo.attrLength, ixNode->keys + _index * indexinfo.attrLength, order / 2 * indexinfo.attrLength);
+			memmove(ixNode->keys + (_index + 1) * indexinfo.attrLength, ixNode->keys + _index * indexinfo.attrLength, (order / 2 - _index) * indexinfo.attrLength);
 			memmove(ixNode->keys + _index * indexinfo.attrLength, pData, indexinfo.attrLength);
 			//移动指针项到新节点
 			memmove(newixNode->rids, ixNode->rids + order / 2, (order + 3) / 2 * PTR_SIZE);
 			memset(ixNode->rids + order / 2, 0, (order + 3) / 2 * PTR_SIZE);
 			//插入新指针项
-			memmove(ixNode->rids + _index + 2, ixNode->rids + _index + 1, (order + 3) / 2 * PTR_SIZE);
+			memmove(ixNode->rids + _index + 2, ixNode->rids + _index + 1, ((order + 3) / 2 - _index) * PTR_SIZE);
 			memmove(ixNode->rids + _index + 1, rid, PTR_SIZE);
 		}
 		else {
@@ -677,13 +723,13 @@ RC InsertEntryInParent(IX_IndexHandle* indexHandle, void* pData, const RID* rid,
 			memmove(newixNode->keys, ixNode->keys + (order / 2 + 1) * indexinfo.attrLength, (order - 1) / 2 * indexinfo.attrLength);
 			memset(ixNode->keys + (order / 2 + 1) * indexinfo.attrLength, 0, (order - 1) / 2 * indexinfo.attrLength);
 			//插入新索引项
-			memmove(newixNode->keys + (_index + 1) * indexinfo.attrLength, newixNode->keys + _index * indexinfo.attrLength, (order - 1) / 2 * indexinfo.attrLength);
+			memmove(newixNode->keys + (_index + 1) * indexinfo.attrLength, newixNode->keys + _index * indexinfo.attrLength, ((order - 1) / 2 - _index) * indexinfo.attrLength);
 			memmove(newixNode->keys + _index * indexinfo.attrLength, pData, indexinfo.attrLength);
 			//移动指针项到新节点
 			memmove(newixNode->rids, ixNode->rids + order / 2 + 1, (order + 1) / 2 * PTR_SIZE);
 			memset(ixNode->rids + order / 2 + 1, 0, (order + 1) / 2 * PTR_SIZE);
 			//插入新指针项
-			memmove(newixNode->rids + _index + 2, newixNode->rids + _index + 1, (order + 1) / 2 * PTR_SIZE);
+			memmove(newixNode->rids + _index + 2, newixNode->rids + _index + 1, ((order - 1) / 2 - _index) * PTR_SIZE);
 			memmove(newixNode->rids + _index + 1, rid, PTR_SIZE);
 		}
 
@@ -712,7 +758,8 @@ RC InsertEntryInParent(IX_IndexHandle* indexHandle, void* pData, const RID* rid,
 			ixNode->parent = rootpageHandle.pFrame->page.pageNum;
 			newixNode->parent = rootpageHandle.pFrame->page.pageNum;
 			memmove(rootixNode->keys, data, indexinfo.attrLength);
-			memmove(rootixNode->rids, (RID*)&pageNum, PTR_SIZE);
+			memmove(rootixNode->rids, (RID*)&pn, PTR_SIZE);
+			memmove(rootixNode->rids + 1, (RID*)&pageNum, PTR_SIZE);
 			rootixNode->keynum++;
 		}
 
@@ -768,16 +815,16 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 
 	//删除指针项，需要区分叶子节点和非叶子节点两种情况
 	if (ixNode->is_leaf) {
-		memmove(ixNode->rids + ridIx, ixNode->rids + ridIx + 1, ixNode->keynum - ridIx);
-		memset(ixNode->rids + ixNode->keynum + 1, 0, (order - ixNode->keynum) * indexinfo.attrLength);
+		memmove(ixNode->rids + ridIx, ixNode->rids + ridIx + 1, (ixNode->keynum + 1 - ridIx) * PTR_SIZE);
+		memset(ixNode->rids + ixNode->keynum, 0, (order - ixNode->keynum) * PTR_SIZE);
 	}
 	else {
-		memmove(ixNode->rids + ridIx + 1, ixNode->rids + ridIx + 2, ixNode->keynum - ridIx - 1);
-		memset(ixNode->rids + ixNode->keynum + 1, 0, (order - ixNode->keynum) * indexinfo.attrLength);
+		memmove(ixNode->rids + ridIx + 1, ixNode->rids + ridIx + 2, (ixNode->keynum - ridIx - 1) * PTR_SIZE);
+		memset(ixNode->rids + ixNode->keynum + 1, 0, (order - ixNode->keynum) * PTR_SIZE);
 	}
 	
 	//如果当前节点是根节点且分支为一，则子节点成为新根节点
-	if (pn == indexHandle->fileHeader.rootPage && ixNode->keynum == 1) {
+	if (pn == indexHandle->fileHeader.rootPage && ixNode->keynum == 1 && ixNode->is_leaf != 1) {
 		indexHandle->fileHeader.rootPage = *(PageNum*)ixNode->rids;
 		MarkDirty(&pageHandle);
 		UnpinPage(&pageHandle);
@@ -915,6 +962,7 @@ RC DeleteEntry(IX_IndexHandle* indexHandle, void* pData, const RID* rid, PageNum
 					memmove(broixNode->rids, broixNode->rids + 1, (broixNode->keynum + 1) * PTR_SIZE);
 				}
 			}
+			ixNode->keynum++;
 		}
 		MarkDirty(&fapageHandle);
 		UnpinPage(&fapageHandle);
