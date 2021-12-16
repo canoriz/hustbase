@@ -18,7 +18,6 @@ typedef struct {
 	char *pData; 		 //记录所存储的数据 
 }RM_Record;
 
-
 typedef struct
 {
 	int bLhsIsAttr, bRhsIsAttr;//左、右是属性（1）还是值（0）
