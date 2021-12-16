@@ -316,6 +316,7 @@ RC IX_GetNextEntry(IX_IndexScan* indexScan, RID* rid)
 		if ((tmp = GetThisPage(indexScan->pIXIndexHandle->fileID, indexScan->pn, &indexScan->PageHandle)) != SUCCESS) {
 			return tmp;
 		}
+		ixNode = getIXNodefromPH(&indexScan->PageHandle);
 		indexScan->pn = ixNode->brother;
 		indexScan->ridIx = 0;
 	}
