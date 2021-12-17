@@ -6,7 +6,6 @@
 
 typedef struct {
 	int attrLength;				//建立索引的属性值的长度
-	int keyLength;				//B+树中关键字的长度
 	AttrType attrType;			//建立索引的属性值的类型
 	PageNum rootPage;			//B+树根节点的页面号
 	PageNum first_leaf;	 		//B+树第一个叶子节点的页面号
