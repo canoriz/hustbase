@@ -28,6 +28,11 @@ public:
 	static Result<Index, RC> open(char* path, char* name);
 
 public:
+	Result<bool, RC> insert_entry(void* value, const RID* rid);
+	Result<bool, RC> delete_entry(void* value, const RID* rid);
+	Result<bool, RC> scan_open(IX_IndexScan* idx_scan, CompOp op, char* value);
+	Result<bool, RC> scan_next(IX_IndexScan* idx_scan, RID* rid);
+	Result<bool, RC> scan_close(IX_IndexScan* idx_scan);
 	bool close();
 };
 

@@ -76,6 +76,51 @@ Result<Index, RC> Index::open(char* path, char* name) {
 	return Result<Index, RC>::Err(res);
 }
 
+Result<bool, RC> Index::insert_entry(void* value, const RID* rid)
+{
+	RC r = InsertEntry(&this->file, value, rid);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Index::delete_entry(void* value, const RID* rid)
+{
+	RC r = DeleteEntry(&this->file, value, rid);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Index::scan_open(IX_IndexScan* idx_scan, CompOp op, char* value)
+{
+	RC r = OpenIndexScan(idx_scan, &this->file, op, value);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Index::scan_next(IX_IndexScan* idx_scan, RID* rid)
+{
+	RC r = IX_GetNextEntry(idx_scan, rid);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Index::scan_close(IX_IndexScan* idx_scan)
+{
+	RC r = CloseIndexScan(idx_scan);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
 bool Index::close() {
 	this->meta.close();
 	return CloseIndex(&this->file) == SUCCESS;
