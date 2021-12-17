@@ -6,6 +6,7 @@
 #ifndef _TABLE_H_
 #define _TABLE_H_
 
+#include <vector>
 #include "RC.h"
 #include "result.h"
 #include "metadata.h"
@@ -48,9 +49,9 @@ public:
 		char* column, Value* v,
 		int  n, Condition* conditions
 	);
+	Result<bool, RC> get_by_rid(RID* rid, RM_Record* rec);
+	Result<bool, RC> remove_by_rid(const RID* rid);
 	Result<bool, RC> remove_match(int n, Condition* conditions);
-
-private:
 	Result<bool, RC> turn_to_con(Condition* cond, Con* con);
 };
 

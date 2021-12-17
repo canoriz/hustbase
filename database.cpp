@@ -45,8 +45,12 @@ bool DataBase::close() {
 		for (auto& t : this->opened_tables) {
 			all_table_closed &= t.close();
 		}
+		bool all_index_closed = true;
+		for (auto& i : this->opened_indices) {
+			all_index_closed &= i.close();
+		}
 		this->opened = false;
-		return all_table_closed;
+		return all_table_closed & all_index_closed;
 	}
 
 	// close nothing???
@@ -294,7 +298,7 @@ Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const v
 	char* buffer = (char*)malloc(21 * n);
 	char* here = buffer;
 	int processing_column_i = t.meta.columns.size() - 1;
-	for (int i = 0; i < t.meta.columns.size(); i++, processing_column_i--) {
+	for (auto i = 0; i < t.meta.columns.size(); i++, processing_column_i--) {
 		ColumnRec* c_rec = &t.meta.columns[processing_column_i];
 		int x = *(int*)vals[i].data;
 		char c = *(char*)vals[i].data;
@@ -305,6 +309,26 @@ Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const v
 	if (!ins_res.ok) {
 		free(buffer);
 		return ins_res.err;
+	}
+	for (auto& c : t.meta.columns) {
+		if (c.ix_flag) {
+			// has index on column c
+			// insert index
+			auto open_idx = this->open_index(c.indexname);
+			if (!open_idx.ok) {
+				free(buffer);
+				return open_idx.err;
+			}
+			auto& idx = open_idx.result;
+			auto idx_ins_res = idx.insert_entry(
+				(void*)(buffer + c.attroffset),
+				(const RID*)&ins_res.result
+			);
+			if (!idx_ins_res.ok) {
+				free(buffer);
+				return idx_ins_res.err;
+			}
+		}
 	}
 	free(buffer);
 	return Result<bool, RC>::Ok(true);
@@ -413,7 +437,50 @@ Result<bool, RC> DataBase::delete_record(
 		// open destination failed
 		return Result<bool, RC>::Err(t_open.err);
 	}
-	return t_open.result.remove_match(n, conditions);
+
+	auto& t = t_open.result;
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = t.turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return res.err;
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	t.scan_open(&scan, n, cons);
+	auto scan_res = t.scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		for (auto& c : t.meta.columns) {
+			if (c.ix_flag) {
+				// remove index if index exists
+				auto i_open = this->open_index(c.indexname);
+				if (!i_open.ok) {
+					return Result<bool, RC>::Err(i_open.err);
+				}
+				auto& i = i_open.result;
+				auto delete_result = i.delete_entry(rec.pData + c.attroffset, &rec.rid);
+				if (!delete_result.ok) {
+					return delete_result;
+				}
+			}
+		}
+		auto delete_res = t.remove_by_rid(&rec.rid);
+		if (!delete_res.ok) {
+			free(cons);
+			t.scan_close(&scan);
+			return Result<bool, RC>::Err(delete_res.err);
+		}
+		scan_res = t.scan_next(&scan, &rec);
+	}
+	t.scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::update_record(
@@ -425,7 +492,73 @@ Result<bool, RC> DataBase::update_record(
 		// open destination failed
 		return Result<bool, RC>::Err(t_open.err);
 	}
-	return t_open.result.update_match(column_name, v, n, conditions);
+	auto& t = t_open.result;
+
+	//auto update_res = t.update_match(column_name, v, n, conditions);
+	// turn Conditions to Cons
+	Con* cons = (Con*)malloc(sizeof(Con) * n);
+	for (int i = 0; i < n; i++) {
+		auto res = t.turn_to_con(&conditions[i], &cons[i]);
+		if (!res.ok) {
+			// cannot convert conditions[i] to cons[i]
+			free(cons);
+			return Result<bool, RC>::Err(res.err);
+		}
+	}
+
+	RM_FileScan scan;
+	RM_Record rec;
+	t.scan_open(&scan, n, cons);
+	auto scan_res = t.scan_next(&scan, &rec);
+
+	while (scan_res.ok && scan_res.result) {
+		auto find_column = t.get_column(column_name);
+		if (!find_column.ok) {
+			free(cons);
+			t.scan_close(&scan);
+			return Result<bool, RC>::Err(find_column.err);
+		}
+		auto const& col = find_column.result;
+		if (v->type != col->attrtype) {
+			free(cons);
+			t.scan_close(&scan);
+			return Result<bool, RC>::Err(TYPE_NOT_MATCH);
+		}
+		if (col->ix_flag) {
+			// update index
+			auto res = this->open_index(col->indexname);
+			if (!res.ok) {
+				free(cons);
+				t.scan_close(&scan);
+				return Result<bool, RC>::Err(res.err);
+			}
+			auto& i = res.result;
+			auto delete_result = i.delete_entry(rec.pData + col->attroffset, &rec.rid);
+			if (!delete_result.ok) {
+				free(cons);
+				t.scan_close(&scan);
+				return delete_result;
+			}
+			memcpy(rec.pData + col->attroffset, v->data, col->attrlength);
+			auto insert_result = i.insert_entry(rec.pData + col->attroffset, &rec.rid);
+			if (!insert_result.ok) {
+				free(cons);
+				t.scan_close(&scan);
+				return insert_result;
+			}
+		}
+		memcpy(rec.pData + col->attroffset, v->data, col->attrlength);
+		RC update_res = UpdateRec(&t.file, &rec);
+		if (update_res != SUCCESS) {
+			free(cons);
+			t.scan_close(&scan);
+			return Result<bool, RC>::Err(update_res);
+		}
+		scan_res = t.scan_next(&scan, &rec);
+	}
+	t.scan_close(&scan);
+	free(cons);
+	return Result<bool, RC>::Ok(true);
 }
 
 Result<bool, RC> DataBase::table_project(
@@ -524,11 +657,7 @@ Result<bool, RC> DataBase::table_select(
 		return Result<bool, RC>::Err(dest_t.err);
 	}
 
-	auto sele_res = tbl.select(dest_t.result, n, conditions);
-	if (!sele_res.ok) {
-		return Result<bool, RC>::Err(sele_res.err);
-	}
-	return Result<bool, RC>::Ok(true);
+	return tbl.select(dest_t.result, n, conditions);
 }
 
 Result<bool, RC> DataBase::make_unit_table(char* const table_name)
@@ -657,6 +786,86 @@ Result<Table, RC> DataBase::query(
 			}
 		}
 	}
+
+	if (
+			n_tables == 1 &&
+			n_conditions == 1 &&
+			query_all_columns &&
+			conditions[0].bLhsIsAttr &&
+			!conditions[0].bRhsIsAttr
+		) {
+		char* the_only_table = tables[0];
+		auto t_open = this->open_table(the_only_table);
+		if (!t_open.ok) {
+			return t_open;
+		}
+		auto& t = t_open.result;
+		char* the_only_column = conditions[0].lhsAttr.attrName;
+		auto column_meta_res = t.get_column(the_only_column);
+		if (!column_meta_res.ok) {
+			return Result<Table, RC>::Err(column_meta_res.err);
+		}
+		auto& c = column_meta_res.result;
+		if (c->ix_flag) {
+			// has index, use index
+			char* dest = this->get_a_tmp_table();
+			AttrInfo* attrs = (AttrInfo*)malloc(sizeof(AttrInfo) * t.meta.columns.size());
+			int attr_count = 0;
+			for (const auto& c : t.meta.columns) {
+				attrs[attr_count].attrLength = c.attrlength;
+				attrs[attr_count].attrName = (char*)c.attrname;
+				attrs[attr_count].attrType = (AttrType)c.attrtype;
+				attr_count++;
+			}
+			auto create_dest = this->add_table(dest, t.meta.columns.size(), attrs);
+			free(attrs);
+			if (!create_dest.ok) {
+				return Result<Table, RC>::Err(create_dest.err);
+			}
+			auto dest_open = this->open_table(dest);
+			auto& dest_table = dest_open.result;
+			if (!dest_open.ok) {
+				this->drop_table(dest);
+				return Result<Table, RC>::Err(FAIL);
+			}
+
+			auto i_open = this->open_index(c->indexname);
+			if (!i_open.ok) {
+				return Result<Table, RC>::Err(i_open.err);
+			}
+			auto& i = i_open.result;
+			IX_IndexScan idx_scan;
+			RID rid;
+			auto scan_open_res = i.scan_open(
+				&idx_scan,
+				conditions[0].op,
+				(char*)conditions[0].rhsValue.data
+			);
+			if (!scan_open_res.ok) {
+				return Result<Table, RC>::Err(scan_open_res.err);
+			}
+
+			auto scan_next_res = i.scan_next(&idx_scan, &rid);
+			while (scan_next_res.ok) {
+				RM_Record rec;
+				auto get_rec_res = t.get_by_rid(&rid, &rec);
+				if (!get_rec_res.ok) {
+					return Result<Table, RC>::Err(get_rec_res.err);
+				}
+				auto insert_res = dest_table.insert_record(rec.pData);
+				if (!insert_res.ok) {
+					return Result<Table, RC>::Err(insert_res.err);
+				}
+				scan_next_res = i.scan_next(&idx_scan, &rid);
+			}
+			i.scan_close(&idx_scan);
+			dest_table.make_select_result(res);
+			// TODO: make table
+			this->release_all_tmp_tables();
+			return Result<Table, RC>::Ok(Table());
+		}
+	}
+
 
 	/* unit table reserved-unit:
 	   for any t,

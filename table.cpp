@@ -370,7 +370,7 @@ Result<bool, RC> Table::update_match(
 		if (!res.ok) {
 			// cannot convert conditions[i] to cons[i]
 			free(cons);
-			return res.err;
+			return Result<bool, RC>::Err(res.err);
 		}
 	}
 
@@ -406,6 +406,24 @@ Result<bool, RC> Table::update_match(
 	return Result<bool, RC>::Ok(true);
 }
 
+Result<bool, RC> Table::get_by_rid(RID* rid, RM_Record* rec)
+{
+	RC r = GetRec(&this->file, rid, rec);
+	if (r != SUCCESS) {
+		return Result<bool, RC>::Err(r);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
+Result<bool, RC> Table::remove_by_rid(const RID* rid)
+{
+	RC delete_res = DeleteRec(&this->file, rid);
+	if (delete_res != SUCCESS) {
+		return Result<bool, RC>::Err(delete_res);
+	}
+	return Result<bool, RC>::Ok(true);
+}
+
 Result<bool, RC> Table::remove_match(int n, Condition* conditions)
 {
 	// turn Conditions to Cons
@@ -425,11 +443,11 @@ Result<bool, RC> Table::remove_match(int n, Condition* conditions)
 	auto scan_res = this->scan_next(&scan, &rec);
 
 	while (scan_res.ok && scan_res.result) {
-		RC delete_res = DeleteRec(&this->file, &rec.rid);
-		if (delete_res != SUCCESS) {
+		auto delete_res = this->remove_by_rid(&rec.rid);
+		if (!delete_res.ok) {
 			free(cons);
 			this->scan_close(&scan);
-			return Result<bool, RC>::Err(delete_res);
+			return Result<bool, RC>::Err(delete_res.err);
 		}
 		scan_res = this->scan_next(&scan, &rec);
 	}

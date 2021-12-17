@@ -39,3 +39,15 @@ delete from sss where sname="lucy";
 select * from student, teachers where student.sage=teachers.id and sname="asdf";
 update student set sage=25 where sname="lucy";
 update sss set sage=25 where sname="lucy";
+
+
+-- index
+create table idt(ino char(15),iname char(20),iage int(4),igender char(8));
+create index itidx on idt(iage);
+insert into idt values("i002","j2",40,"male");
+insert into idt values("i001","j1",20,"male");
+insert into idt values("i003","j3",60,"male");
+delete from idt where iage=60;
+update idt set iage=25 where iname="j2";
+select * from idt;
+select * from idt where iage<50;
