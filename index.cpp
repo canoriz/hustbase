@@ -6,6 +6,10 @@
 const int PATH_SIZE = 320;
 
 Result<bool, RC> Index::create(char* path, char* iname, char* tname, char* cname, AttrType atype, int attrlen) {
+	if (strlen(iname) >= 20) {
+		// index name too long
+		return Result<bool, RC>::Err(INDEX_NAME_ILLEGAL);
+	}
 	// metadata path
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, path);

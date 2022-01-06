@@ -8,6 +8,26 @@ const int PATH_SIZE = 320;
 
 Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attrs) {
 	// metadata path
+	if (strlen(name) >= 20) {
+		// table name too long
+		return Result<bool, RC>::Err(FIELD_NAME_ILLEGAL);
+	}
+	for (auto i = 0; i < count; i++) {
+		AttrInfo i_attr = attrs[i];
+		if (strlen(i_attr.attrName) >= 20) {
+			// column name too long
+			return Result<bool, RC>::Err(FIELD_NAME_ILLEGAL);
+		}
+		for (auto j = 0; j < i; j++) {
+			AttrInfo j_attr = attrs[j];
+			const int SAME = 0;
+			if (strcmp(j_attr.attrName, i_attr.attrName) == SAME) {
+				// same column name
+				return Result<bool, RC>::Err(FIELD_NAME_ILLEGAL);
+			}
+		}
+	}
+
 	char full_path[PATH_SIZE] = "";
 	strcpy(full_path, path);
 	strcat(full_path, "\\.");
@@ -21,18 +41,6 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 	if (!res.ok) {
 		// open metadata failed
 		return Result<bool, RC>::Err(FAIL);
-	}
-
-	for (auto i = 0; i < count; i++) {
-		AttrInfo i_attr = attrs[i];
-		for (auto j = 0; j < i; j++) {
-			AttrInfo j_attr = attrs[j];
-			const int SAME = 0;
-			if (strcmp(j_attr.attrName, i_attr.attrName) == SAME) {
-				// same column name
-				return Result<bool, RC>::Err(FIELD_NAME_ILLEGAL);
-			}
-		}
 	}
 
 	// store metadata
