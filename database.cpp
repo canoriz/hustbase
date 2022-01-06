@@ -295,6 +295,13 @@ Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const v
 	}
 	auto& t = opent.result;
 
+	if (t.meta.columns.size() < n) {
+		return Result<bool, RC>::Err(FIELD_REDUNDAN);
+	}
+	if (t.meta.columns.size() > n) {
+		return Result<bool, RC>::Err(FIELD_MISSING);
+	}
+
 	char* buffer = (char*)malloc(21 * n);
 	char* here = buffer;
 	int processing_column_i = t.meta.columns.size() - 1;
@@ -302,6 +309,10 @@ Result<bool, RC> DataBase::insert(char* const table, const int n, Value* const v
 		ColumnRec* c_rec = &t.meta.columns[processing_column_i];
 		int x = *(int*)vals[i].data;
 		char c = *(char*)vals[i].data;
+		if ((AttrType)c_rec->attrtype != vals[i].type) {
+			free(buffer);
+			return Result<bool, RC>::Err(FIELD_TYPE_MISMATCH);
+		}
 		memcpy(buffer + c_rec->attroffset, vals[i].data, c_rec->attrlength);
 	}
 
