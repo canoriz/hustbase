@@ -446,7 +446,7 @@ Result<bool, RC> DataBase::delete_record(
 		if (!res.ok) {
 			// cannot convert conditions[i] to cons[i]
 			free(cons);
-			return res.err;
+			return Result<bool, RC>::Err(res.err);
 		}
 	}
 
