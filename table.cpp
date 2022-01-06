@@ -23,6 +23,18 @@ Result<bool, RC> Table::create(char* path, char* name, int count, AttrInfo* attr
 		return Result<bool, RC>::Err(FAIL);
 	}
 
+	for (auto i = 0; i < count; i++) {
+		AttrInfo i_attr = attrs[i];
+		for (auto j = 0; j < i; j++) {
+			AttrInfo j_attr = attrs[j];
+			const int SAME = 0;
+			if (strcmp(j_attr.attrName, i_attr.attrName) == SAME) {
+				// same column name
+				return Result<bool, RC>::Err(FIELD_NAME_ILLEGAL);
+			}
+		}
+	}
+
 	// store metadata
 	TableMetaData tmeta = res.result;
 	int aggregate_size = 0;
